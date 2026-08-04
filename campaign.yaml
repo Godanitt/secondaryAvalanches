@@ -1,0 +1,55 @@
+scan_mode: field
+measure_gas_transport: false
+record_excitation_positions: true
+space_charge: false
+
+# Integrated photon generation, Garfield++ transport and feedback chain.
+parameters_dir: data/parameters
+mc_samples: 1
+random_seed: 12345
+photo_absorption: true
+# Keep the full spectrum, but only transport photons with E_gamma > PhiT.
+# PhiT is read automatically from the selected QE material/model.
+propagate_only_above_phit: true
+photon_transport_cut_ev: 0.0
+
+# Parallel plates are treated as effectively infinite in x/y. The finite
+# Garfield++ area is only a numerical safety box, with a half-width of 100 gaps.
+infinite_electrodes: true
+optical_half_width_gaps: 100.0
+
+# Keep the long optical window for delayed feedback, but use this prompt
+# window for the main electron-endpoint histogram so the primary peak is visible.
+prompt_time_max_ns: 100.0
+qe_material: stainless_steel # Ti
+qe_csv: data/qe/qe_materials.csv
+qe_model: measured_extended
+electron_extraction_efficiency: 1.0
+propagate_photoionisation_electrons: true
+max_feedback_generations: 5
+max_avalanches_per_primary: 10000
+max_mc_photons_per_primary: 100000000
+
+# Four fixed-field simulations per composition:
+# E_ref, 0.90 E_ref, 0.75 E_ref and 0.50 E_ref.
+field_sets:
+  - components: {ar: 90, cf4: 10}
+    pressures_bar: [1]
+    gap_mm: 0.150
+    reference_field_kv_cm: 39.8
+    field_scales: [1.1, 1.2]
+
+  - components: {ar: 85, cf4: 15}
+    pressures_bar: [1]
+    gap_mm: 0.150
+    reference_field_kv_cm: 43
+    field_scales: [1.1, 1.2]
+
+  - components: {ar: 80, cf4: 20}
+    pressures_bar: [1]
+    gap_mm: 0.150
+    reference_field_kv_cm: 44
+    field_scales: [1.1, 1.2]
+
+npe: 20
+workers: 3

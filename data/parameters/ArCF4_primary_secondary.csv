@@ -1,0 +1,12 @@
+name,value,description
+Nnorm,0.0052213212772051,secondary_optimal from scintillationModel/data/Tables/param_secondary
+P_CF3_vis_dir,0.08994679202677665,secondary_optimal from scintillationModel/data/Tables/param_secondary
+P_Ar_dbleStar,0.37049176779681403,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_dbleStar_Q_Ar,244.673181465848,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_dbleStar_Q_CF4,9999.93000450232,secondary_optimal from scintillationModel/data/Tables/param_secondary
+inv_tau_dis_K_relax,0.00800755206882,secondary_optimal from scintillationModel/data/Tables/param_secondary
+tau_uv_K_CF4_Q_CF4,0.065,secondary_optimal from scintillationModel/data/Tables/param_secondary
+P_CF4_dir,0.0918775551763751,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar3rd_Q_CF4,50.05,secondary_optimal from scintillationModel/data/Tables/param_secondary
+P_Ar3rd,0.4094583252164259,secondary_optimal from scintillationModel/data/Tables/param_secondary
+P_CF3_uv_dir,0.25,secondary_optimal from scintillationModel/data/Tables/param_secondary

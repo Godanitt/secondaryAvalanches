@@ -1,0 +1,3 @@
+/home/daniel/GitHub/secondaryAvalanches/build/CMakeFiles/secondaryAvalanches.dir
+/home/daniel/GitHub/secondaryAvalanches/build/CMakeFiles/edit_cache.dir
+/home/daniel/GitHub/secondaryAvalanches/build/CMakeFiles/rebuild_cache.dir

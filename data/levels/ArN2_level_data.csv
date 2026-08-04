@@ -1,0 +1,193 @@
+level,gas,state_name,type,energy_eV,n_collisions
+0,"Ar"," ELASTIC ANISOTROPIC       ARGON                  ","elastic",0,0
+1,"Ar"," IONISATION CHARGE STATE =1      ELOSS=   15.75961","ionisation",15.7596,0
+2,"Ar"," IONISATION CHARGE STATE =2      ELOSS=   43.38928","ionisation",43.3893,0
+3,"Ar"," IONISATION CHARGE STATE =3      ELOSS=   84.124  ","ionisation",84.124,0
+4,"Ar"," IONISATION L3 SHELL             ELOSS=  248.4    ","ionisation",248.4,0
+5,"Ar"," IONISATION L2 SHELL             ELOSS=  250.6    ","ionisation",250.6,0
+6,"Ar"," IONISATION L1 SHELL             ELOSS=  326.3    ","ionisation",326.3,0
+7,"Ar"," ATTACHMENT                                       ","attachment",0,0
+8,"Ar"," EXC 1S5    J=2 METASTABLE         ELEVEL= 11.548 ","excitation",11.548,0
+9,"Ar"," EXC 1S4    J=1 RESONANT           ELEVEL= 11.624 ","excitation",11.624,0
+10,"Ar"," EXC 1S3    J=0 METASTABLE         ELEVEL= 11.723 ","excitation",11.723,0
+11,"Ar"," EXC 1S2    J=1 RESONANT           ELEVEL= 11.828 ","excitation",11.828,0
+12,"Ar"," EXC 2P10   J=1                    ELEVEL= 12.907 ","excitation",12.907,0
+13,"Ar"," EXC 2P9    J=3                    ELEVEL= 13.076 ","excitation",13.076,0
+14,"Ar"," EXC 2P8    J=2                    ELEVEL= 13.095 ","excitation",13.095,0
+15,"Ar"," EXC 2P7    J=1                    ELEVEL= 13.153 ","excitation",13.153,0
+16,"Ar"," EXC 2P6    J=2                    ELEVEL= 13.172 ","excitation",13.172,0
+17,"Ar"," EXC 2P5    J=0                    ELEVEL= 13.273 ","excitation",13.273,0
+18,"Ar"," EXC 2P4    J=1                    ELEVEL= 13.283 ","excitation",13.283,0
+19,"Ar"," EXC 2P3    J=2                    ELEVEL= 13.302 ","excitation",13.302,0
+20,"Ar"," EXC 2P2    J=1                    ELEVEL= 13.328 ","excitation",13.328,0
+21,"Ar"," EXC 2P1    J=0                    ELEVEL= 13.480 ","excitation",13.48,0
+22,"Ar"," EXC 3D6    J=0                    ELEVEL= 13.845 ","excitation",13.845,0
+23,"Ar"," EXC 3D5    J=1 RESONANT           ELEVEL= 13.864 ","excitation",13.864,0
+24,"Ar"," EXC 3D3    J=2                    ELEVEL= 13.903 ","excitation",13.903,0
+25,"Ar"," EXC 3D4!   J=4                    ELEVEL= 13.979 ","excitation",13.979,0
+26,"Ar"," EXC 3D4    J=3                    ELEVEL= 14.013 ","excitation",14.013,0
+27,"Ar"," EXC 3D1!!  J=2                    ELEVEL= 14.063 ","excitation",14.063,0
+28,"Ar"," EXC 2S5    J=2                    ELEVEL= 14.068 ","excitation",14.068,0
+29,"Ar"," EXC 2S4    J=1 RESONANT           ELEVEL= 14.090 ","excitation",14.09,0
+30,"Ar"," EXC 3D1!   J=3                    ELEVEL= 14.099 ","excitation",14.099,0
+31,"Ar"," EXC 3D2    J=1 RESONANT           ELEVEL= 14.153 ","excitation",14.153,0
+32,"Ar"," EXC 3S1!!!!J=2                    ELEVEL= 14.214 ","excitation",14.214,0
+33,"Ar"," EXC 3S1!!  J=2                    ELEVEL= 14.234 ","excitation",14.234,0
+34,"Ar"," EXC 3S1!!! J=3                    ELEVEL= 14.236 ","excitation",14.236,0
+35,"Ar"," EXC 2S3    J=0                    ELEVEL= 14.241 ","excitation",14.241,0
+36,"Ar"," EXC 2S2    J=1 RESONANT           ELEVEL= 14.255 ","excitation",14.255,0
+37,"Ar"," EXC 3S1!   J=1 RESONANT           ELEVEL= 14.304 ","excitation",14.304,0
+38,"Ar"," EXC 4D5    J=1 RESONANT           ELEVEL= 14.711 ","excitation",14.711,0
+39,"Ar"," EXC 3S4    J=1 RESONANT           ELEVEL= 14.848 ","excitation",14.848,0
+40,"Ar"," EXC 4D2    J=1 RESONANT           ELEVEL= 14.859 ","excitation",14.859,0
+41,"Ar"," EXC 4S1!   J=1 RESONANT           ELEVEL= 15.004 ","excitation",15.004,0
+42,"Ar"," EXC 3S2    J=1 RESONANT           ELEVEL= 15.022 ","excitation",15.022,0
+43,"Ar"," EXC 5D5    J=1 RESONANT           ELEVEL= 15.118 ","excitation",15.118,0
+44,"Ar"," EXC 4S4    J=1 RESONANT           ELEVEL= 15.186 ","excitation",15.186,0
+45,"Ar"," EXC 5D2    J=1 RESONANT           ELEVEL= 15.190 ","excitation",15.19,0
+46,"Ar"," EXC 6D5    J=1 RESONANT           ELEVEL= 15.308 ","excitation",15.308,0
+47,"Ar"," EXC 5S1!   J=1 RESONANT           ELEVEL= 15.351 ","excitation",15.351,0
+48,"Ar"," EXC 4S2    J=1 RESONANT           ELEVEL= 15.360 ","excitation",15.36,0
+49,"Ar"," EXC 5S4    J=1 RESONANT           ELEVEL= 15.366 ","excitation",15.366,0
+50,"Ar"," EXC 6D2    J=1 RESONANT           ELEVEL= 15.374 ","excitation",15.374,0
+51,"Ar"," EXC HIGH   J=1 RESONANT           ELEVEL= 15.660 ","excitation",15.66,0
+52,"N2"," ELASTIC ANISOTROPIC          NITROGEN            ","elastic",0,0
+53,"N2"," IONISATION N2+ X2SIGMA VIB=0     ELOSS=  15.581  ","ionisation",15.581,0
+54,"N2"," IONISATION N2+ X2SIGMA VIB>0     ELOSS=  15.855  ","ionisation",15.855,0
+55,"N2"," IONISATION N2+ A2PI    VIB=0     ELOSS=  16.699  ","ionisation",16.699,0
+56,"N2"," IONISATION N2+ A2PI    VIB=1     ELOSS=  16.935  ","ionisation",16.935,0
+57,"N2"," IONISATION N2+ A2PI    VIB>1     ELOSS=  17.171  ","ionisation",17.171,0
+58,"N2"," IONISATION N2+ B2SIGMA           ELOSS=  18.751  ","ionisation",18.751,0
+59,"N2"," IONISATION N2+ C2SIGMA           ELOSS=  23.591  ","ionisation",23.591,0
+60,"N2"," DISSOC ION (N+,N)                ELOSS=  24.294  ","ionisation",24.294,0
+61,"N2"," DISSOC ION (N+,N*)               ELOSS=  24.4    ","ionisation",24.4,0
+62,"N2"," DISSOC ION (N+*,N)               ELOSS=  35.7    ","ionisation",35.7,0
+63,"N2"," DISSOC ION (N++,N) AND (N+,N+)   ELOSS=  38.8    ","ionisation",38.8,0
+64,"N2"," ATTACHMENT                                       ","attachment",0,0
+65,"N2"," ROTATION  2-0                    ELOSS=  -0.00148","superelastic",-0.00148008,0
+66,"N2"," ROTATION  3-1                    ELOSS=  -0.00247","superelastic",-0.0024668,0
+67,"N2"," ROTATION  4-2                    ELOSS=  -0.00345","superelastic",-0.00345352,0
+68,"N2"," ROTATION  5-3                    ELOSS=  -0.00444","superelastic",-0.00444024,0
+69,"N2"," ROTATION  6-4                    ELOSS=  -0.00543","superelastic",-0.00542696,0
+70,"N2"," ROTATION  7-5                    ELOSS=  -0.00641","superelastic",-0.00641368,0
+71,"N2"," ROTATION  8-6                    ELOSS=  -0.00740","superelastic",-0.0074004,0
+72,"N2"," ROTATION  9-7                    ELOSS=  -0.00839","superelastic",-0.00838712,0
+73,"N2"," ROTATION 10-8                    ELOSS=  -0.00937","superelastic",-0.00937384,0
+74,"N2"," ROTATION 11-9                    ELOSS=  -0.0104 ","superelastic",-0.0103606,0
+75,"N2"," ROTATION 12-10                   ELOSS=  -0.0113 ","superelastic",-0.0113473,0
+76,"N2"," ROTATION 13-11                   ELOSS=  -0.0123 ","superelastic",-0.012334,0
+77,"N2"," ROTATION 14-12                   ELOSS=  -0.0133 ","superelastic",-0.0133207,0
+78,"N2"," ROTATION 15-13                   ELOSS=  -0.0143 ","superelastic",-0.0143074,0
+79,"N2"," ROTATION 16-14                   ELOSS=  -0.0153 ","superelastic",-0.0152942,0
+80,"N2"," ROTATION 17-15                   ELOSS=  -0.0163 ","superelastic",-0.0162809,0
+81,"N2"," ROTATION 18-16                   ELOSS=  -0.0173 ","superelastic",-0.0172676,0
+82,"N2"," ROTATION 19-17                   ELOSS=  -0.0183 ","superelastic",-0.0182543,0
+83,"N2"," ROTATION 20-18                   ELOSS=  -0.0192 ","superelastic",-0.019241,0
+84,"N2"," ROTATION 21-19                   ELOSS=  -0.0202 ","superelastic",-0.0202278,0
+85,"N2"," ROTATION 22-20                   ELOSS=  -0.0212 ","superelastic",-0.0212145,0
+86,"N2"," ROTATION 23-21                   ELOSS=  -0.0222 ","superelastic",-0.0222012,0
+87,"N2"," ROTATION 24-22                   ELOSS=  -0.0232 ","superelastic",-0.0231879,0
+88,"N2"," ROTATION 25-23                   ELOSS=  -0.0242 ","superelastic",-0.0241746,0
+89,"N2"," ROTATION 26-24                   ELOSS=  -0.0252 ","superelastic",-0.0251614,0
+90,"N2"," ROTATION 27-25                   ELOSS=  -0.0261 ","superelastic",-0.0261481,0
+91,"N2"," ROTATION 28-26                   ELOSS=  -0.0271 ","superelastic",-0.0271348,0
+92,"N2"," ROTATION 29-27                   ELOSS=  -0.0281 ","superelastic",-0.0281215,0
+93,"N2"," ROTATION 30-28                   ELOSS=  -0.0291 ","superelastic",-0.0291082,0
+94,"N2"," ROTATION 31-29                   ELOSS=  -0.0301 ","superelastic",-0.030095,0
+95,"N2"," ROTATION 32-30                   ELOSS=  -0.0311 ","superelastic",-0.0310817,0
+96,"N2"," ROTATION 33-31                   ELOSS=  -0.0321 ","superelastic",-0.0320684,0
+97,"N2"," ROTATION 34-32                   ELOSS=  -0.0331 ","superelastic",-0.0330551,0
+98,"N2"," ROTATION 35-33                   ELOSS=  -0.0340 ","superelastic",-0.0340418,0
+99,"N2"," ROTATION 36-34                   ELOSS=  -0.0350 ","superelastic",-0.0350286,0
+100,"N2"," ROTATION 37-35                   ELOSS=  -0.0360 ","superelastic",-0.0360153,0
+101,"N2"," ROTATION 38-36                   ELOSS=  -0.0370 ","superelastic",-0.037002,0
+102,"N2"," ROTATION 39-37                   ELOSS=  -0.0380 ","superelastic",-0.0379887,0
+103,"N2"," ROTATION 0-2                     ELOSS=   0.00148","inelastic",0.00148008,0
+104,"N2"," ROTATION 1-3                     ELOSS=   0.00247","inelastic",0.0024668,0
+105,"N2"," ROTATION 2-4                     ELOSS=   0.00345","inelastic",0.00345352,0
+106,"N2"," ROTATION 3-5                     ELOSS=   0.00444","inelastic",0.00444024,0
+107,"N2"," ROTATION 4-6                     ELOSS=   0.00543","inelastic",0.00542696,0
+108,"N2"," ROTATION 5-7                     ELOSS=   0.00641","inelastic",0.00641368,0
+109,"N2"," ROTATION 6-8                     ELOSS=   0.00740","inelastic",0.0074004,0
+110,"N2"," ROTATION 7-9                     ELOSS=   0.00839","inelastic",0.00838712,0
+111,"N2"," ROTATION 8-10                    ELOSS=   0.00937","inelastic",0.00937384,0
+112,"N2"," ROTATION 9-11                    ELOSS=   0.0104 ","inelastic",0.0103606,0
+113,"N2"," ROTATION 10-12                   ELOSS=   0.0113 ","inelastic",0.0113473,0
+114,"N2"," ROTATION 11-13                   ELOSS=   0.0123 ","inelastic",0.012334,0
+115,"N2"," ROTATION 12-14                   ELOSS=   0.0133 ","inelastic",0.0133207,0
+116,"N2"," ROTATION 13-15                   ELOSS=   0.0143 ","inelastic",0.0143074,0
+117,"N2"," ROTATION 14-16                   ELOSS=   0.0153 ","inelastic",0.0152942,0
+118,"N2"," ROTATION 15-17                   ELOSS=   0.0163 ","inelastic",0.0162809,0
+119,"N2"," ROTATION 16-18                   ELOSS=   0.0173 ","inelastic",0.0172676,0
+120,"N2"," ROTATION 17-19                   ELOSS=   0.0183 ","inelastic",0.0182543,0
+121,"N2"," ROTATION 18-20                   ELOSS=   0.0192 ","inelastic",0.019241,0
+122,"N2"," ROTATION 19-21                   ELOSS=   0.0202 ","inelastic",0.0202278,0
+123,"N2"," ROTATION 20-22                   ELOSS=   0.0212 ","inelastic",0.0212145,0
+124,"N2"," ROTATION 21-23                   ELOSS=   0.0222 ","inelastic",0.0222012,0
+125,"N2"," ROTATION 22-24                   ELOSS=   0.0232 ","inelastic",0.0231879,0
+126,"N2"," ROTATION 23-25                   ELOSS=   0.0242 ","inelastic",0.0241746,0
+127,"N2"," ROTATION 24-26                   ELOSS=   0.0252 ","inelastic",0.0251614,0
+128,"N2"," ROTATION 25-27                   ELOSS=   0.0261 ","inelastic",0.0261481,0
+129,"N2"," ROTATION 26-28                   ELOSS=   0.0271 ","inelastic",0.0271348,0
+130,"N2"," ROTATION 27-29                   ELOSS=   0.0281 ","inelastic",0.0281215,0
+131,"N2"," ROTATION 28-30                   ELOSS=   0.0291 ","inelastic",0.0291082,0
+132,"N2"," ROTATION 29-31                   ELOSS=   0.0301 ","inelastic",0.030095,0
+133,"N2"," ROTATION 30-32                   ELOSS=   0.0311 ","inelastic",0.0310817,0
+134,"N2"," ROTATION 31-33                   ELOSS=   0.0321 ","inelastic",0.0320684,0
+135,"N2"," ROTATION 32-34                   ELOSS=   0.0331 ","inelastic",0.0330551,0
+136,"N2"," ROTATION 33-35                   ELOSS=   0.0340 ","inelastic",0.0340418,0
+137,"N2"," ROTATION 34-36                   ELOSS=   0.0350 ","inelastic",0.0350286,0
+138,"N2"," ROTATION 35-37                   ELOSS=   0.0360 ","inelastic",0.0360153,0
+139,"N2"," ROTATION 36-38                   ELOSS=   0.0370 ","inelastic",0.037002,0
+140,"N2"," ROTATION 37-39                   ELOSS=   0.0380 ","inelastic",0.0379887,0
+141,"N2"," VIBRATION     V1                 ELOSS=  -0.2889 ","superelastic",-0.2889,0
+142,"N2"," VIBRATION     V1                 ELOSS=   0.2889 ","inelastic",0.2889,0
+143,"N2"," VIBRATION    2V1                 ELOSS=   0.5742 ","inelastic",0.5742,0
+144,"N2"," VIBRATION    3V1                 ELOSS=   0.8559 ","inelastic",0.8559,0
+145,"N2"," VIBRATION    4V1                 ELOSS=   1.1342 ","inelastic",1.1342,0
+146,"N2"," VIBRATION    5V1                 ELOSS=   1.4088 ","inelastic",1.4088,0
+147,"N2"," VIBRATION    6V1                 ELOSS=   1.6801 ","inelastic",1.6801,0
+148,"N2"," VIBRATION    7V1                 ELOSS=   1.9475 ","inelastic",1.9475,0
+149,"N2"," VIBRATION    8V1                 ELOSS=   2.2115 ","inelastic",2.2115,0
+150,"N2"," VIBRATION    9V1                 ELOSS=   2.4718 ","inelastic",2.4718,0
+151,"N2"," VIBRATION   10V1                 ELOSS=   2.7284 ","inelastic",2.7284,0
+152,"N2"," VIBRATION   11V1                 ELOSS=   2.9815 ","inelastic",2.9815,0
+153,"N2"," VIBRATION   12V1                 ELOSS=   3.2310 ","inelastic",3.231,0
+154,"N2"," VIBRATION   13V1                 ELOSS=   3.4769 ","inelastic",3.4769,0
+155,"N2"," VIBRATION   14V1                 ELOSS=   3.7191 ","inelastic",3.7191,0
+156,"N2"," VIBRATION   15V1                 ELOSS=   3.9576 ","inelastic",3.9576,0
+157,"N2"," A3SIG     V=0-4                  ELOSS=   6.725  ","excitation",6.725,0
+158,"N2"," A3SIG     V=5-9                  ELOSS=   7.360  ","excitation",7.36,0
+159,"N2"," B 3PI     V=0-3                  ELOSS=   7.744  ","excitation",7.744,0
+160,"N2"," W3DEL     V=0-5                  ELOSS=   8.050  ","excitation",8.05,0
+161,"N2"," A3SIG     V=10-21                ELOSS=   8.217  ","excitation",8.217,0
+162,"N2"," B 3PI     V=4-16                 ELOSS=   8.451  ","excitation",8.451,0
+163,"N2"," W3DEL     V=6-10                 ELOSS=   8.729  ","excitation",8.729,0
+164,"N2"," A 1PI     V=0-3                  ELOSS=   8.950  ","excitation",8.95,0
+165,"N2"," B!3SIG    V=0-6                  ELOSS=   8.974  ","excitation",8.974,0
+166,"N2"," A!1SIG    V=0-6                  ELOSS=   9.191  ","excitation",9.191,0
+167,"N2"," W3DEL     V=11-19                ELOSS=   9.562  ","excitation",9.562,0
+168,"N2"," W 1DEL    V=0-5                  ELOSS=   9.590  ","excitation",9.59,0
+169,"N2"," A 1PI     V=4-15                 ELOSS=   9.665  ","excitation",9.665,0
+170,"N2"," B!3SIG    V=7-18                 ELOSS=   9.933  ","excitation",9.933,0
+171,"N2"," A!1SIG    V=7-19                 ELOSS=  10.174  ","excitation",10.174,0
+172,"N2"," W 1DEL    V=6-18                 ELOSS=  10.536  ","excitation",10.536,0
+173,"N2"," C 3PI     V=0-4                  ELOSS=  11.188  ","excitation",11.188,0
+174,"N2"," E 3SIG                           ELOSS=  11.875  ","excitation",11.875,0
+175,"N2"," A!!1SIG   V=0-1                  ELOSS=  12.289  ","excitation",12.289,0
+176,"N2"," B 1PI     V=0-6     F=0.1855     ELOSS=  12.781  ","excitation",12.781,0
+177,"N2"," C!1SIG    V=0-3     F=0.1500     ELOSS=  13.000  ","excitation",13,0
+178,"N2"," G 3PI     V=0-3                  ELOSS=  13.001  ","excitation",13.001,0
+179,"N2"," C3 1PI    V=0-3     F=0.1500     ELOSS=  13.076  ","excitation",13.076,0
+180,"N2"," F 3PI     V=0-3                  ELOSS=  13.174  ","excitation",13.174,0
+181,"N2"," B 1PI     V=7-14    F=0.0663     ELOSS=  13.338  ","excitation",13.338,0
+182,"N2"," B!1SIG    V=0-10    F=0.0601     ELOSS=  13.385  ","excitation",13.385,0
+183,"N2"," O3 1PI    V=0-3     F=0.0828     ELOSS=  13.628  ","excitation",13.628,0
+184,"N2"," C!1SIG    V=4-6     F=0.1390     ELOSS=  14.090  ","excitation",14.09,0
+185,"N2"," B!1SIG    V=11-24   F=0.2650     ELOSS=  14.232  ","excitation",14.232,0
+186,"N2"," E!1SIG              F=0.0108     ELOSS=  14.36   ","excitation",14.36,0
+187,"N2"," E 1PI               F=0.0237     ELOSS=  14.45   ","excitation",14.45,0
+188,"N2"," SINGLET LEVEL       F=0.0117     ELOSS=  14.839  ","excitation",14.839,0
+189,"N2"," SUM HIGH SINGLETS   F=0.1152     ELOSS=  15.2    ","excitation",15.2,0
+190,"N2"," NEUTRAL DISS ABOVE IONIS. ENERGY ELOSS=  15.6    ","excitation",15.6,0
+191,"N2"," NEUTRAL DISS ABOVE IONIS. ENERGY ELOSS=  16.6    ","excitation",16.6,0

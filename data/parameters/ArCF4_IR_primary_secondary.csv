@@ -1,0 +1,21 @@
+name,value,description
+PAr_star_696,0.000358169006753,secondary_optimal from scintillationModel/data/Tables/param_secondary
+tau_CF4_696,28.3,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_Ar_696,0.0302574664606149,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_CF4_696,6.092076655034666,secondary_optimal from scintillationModel/data/Tables/param_secondary
+PAr_star_727,3.5430207403561113e-05,secondary_optimal from scintillationModel/data/Tables/param_secondary
+tau_CF4_727,28.3,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_Ar_727,0.0152930458815992,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_CF4_727,1.6549623243269913e-62,secondary_optimal from scintillationModel/data/Tables/param_secondary
+PAr_star_750,0.0399999999999998,secondary_optimal from scintillationModel/data/Tables/param_secondary
+tau_CF4_750,21.7,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_Ar_750,14.329708347719963,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_CF4_750,57.90680837116734,secondary_optimal from scintillationModel/data/Tables/param_secondary
+PAr_star_764,0.0399999999999998,secondary_optimal from scintillationModel/data/Tables/param_secondary
+tau_CF4_764,29.4,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_Ar_764,4.114748822740857,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_CF4_764,181.4525188688039,secondary_optimal from scintillationModel/data/Tables/param_secondary
+PAr_star_772,0.0030193645341222,secondary_optimal from scintillationModel/data/Tables/param_secondary
+tau_CF4_772,28.3,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_Ar_772,0.1103729520638603,secondary_optimal from scintillationModel/data/Tables/param_secondary
+K_Ar_Q_CF4_772,72.47981310855506,secondary_optimal from scintillationModel/data/Tables/param_secondary

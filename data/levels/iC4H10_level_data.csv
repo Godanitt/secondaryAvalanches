@@ -1,0 +1,30 @@
+level,gas,state_name,type,energy_eV,n_collisions
+0,"iC4H10"," ELASTIC  ANISOTROPIC      ISOBUTANE              ","elastic",0,0
+1,"iC4H10"," IONISATION                       ELOSS=  10.67   ","ionisation",10.6700000763,0
+2,"iC4H10"," IONISATION-EXCITATION (BREAKUP)  ELOSS=  17.0    ","ionisation",17,0
+3,"iC4H10"," IONISATION  K-SHELL              ELOSS= 285.0    ","ionisation",285,0
+4,"iC4H10"," ATTACHMENT                                       ","attachment",0,0
+5,"iC4H10"," TORSION                          ELOSS=  -0.032  ","superelastic",-0.0320000015199,0
+6,"iC4H10"," TORSION                          ELOSS=   0.032  ","inelastic",0.0320000015199,0
+7,"iC4H10"," VIBRATION  BEND                  ELOSS=  -0.108  ","superelastic",-0.108000002801,0
+8,"iC4H10"," VIBRATION  BEND                  ELOSS=   0.108  ","inelastic",0.108000002801,0
+9,"iC4H10"," VIBRATION  STRETCH               ELOSS=  -0.173  ","superelastic",-0.172999992967,0
+10,"iC4H10"," VIBRATION  STRETCH               ELOSS=   0.173  ","inelastic",0.172999992967,0
+11,"iC4H10"," VIBRATION  STRETCH               ELOSS=  -0.363  ","superelastic",-0.363000005484,0
+12,"iC4H10"," VIBRATION  STRETCH               ELOSS=   0.363  ","inelastic",0.363000005484,0
+13,"iC4H10"," VIBRATION  STRETCH               ELOSS=   0.519  ","inelastic",0.518999993801,0
+14,"iC4H10"," EXC.  TRIPLET                    ELOSS=   7.2    ","excitation",7.19999980927,0
+15,"iC4H10"," EXC.  TRIPLET                    ELOSS=   8.6    ","excitation",8.60000038147,0
+16,"iC4H10"," EXC. SINGLET         F=.0013     ELOSS=   7.5    ","excitation",7.5,0
+17,"iC4H10"," EXC. SINGLET         F=.0150     ELOSS=   8.0    ","excitation",8,0
+18,"iC4H10"," EXC. SINGLET         F=.1140     ELOSS=   8.5    ","excitation",8.5,0
+19,"iC4H10"," EXC. SINGLET         F=.1570     ELOSS=   9.0    ","excitation",9,0
+20,"iC4H10"," EXC. SINGLET         F=.1710     ELOSS=   9.5    ","excitation",9.5,0
+21,"iC4H10"," EXC. SINGLET         F=.1880     ELOSS=  10.0    ","excitation",10,0
+22,"iC4H10"," EXC. SINGLET         F=.2050     ELOSS=  10.5    ","excitation",10.5,0
+23,"iC4H10"," EXC. SINGLET         F=.1930     ELOSS=  11.0    ","excitation",11,0
+24,"iC4H10"," EXC. SINGLET         F=.1620     ELOSS=  11.5    ","excitation",11.5,0
+25,"iC4H10"," EXC. SINGLET         F=.1030     ELOSS=  12.0    ","excitation",12,0
+26,"iC4H10"," EXC. SINGLET         F=.0670     ELOSS=  12.5    ","excitation",12.5,0
+27,"iC4H10"," EXC. SINGLET         F=.0640     ELOSS=  13.0    ","excitation",13,0
+28,"iC4H10"," EXC. SINGLET         F=.0280     ELOSS=  13.5    ","excitation",13.5,0

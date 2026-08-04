@@ -1,0 +1,113 @@
+level,gas,state_name,type,energy_eV,n_collisions
+0,"He"," ELASTIC  ANISOTROPIC            HELIUM 4         ","elastic",0,0
+1,"He"," IONISATION CHARGE STATE=1         ELOSS= 24.58739","ionisation",24.5874,0
+2,"He"," IONISATION CHARGE STATE=2         ELOSS= 79.00515","ionisation",79.0051,0
+3,"He"," ATTACHMENT                                       ","attachment",0,0
+4,"He"," EXC  23S J=1    METASTABLE        ELOSS= 19.81961","excitation",19.8196,0
+5,"He"," EXC  21S J=0    METASTABLE        ELOSS= 20.61577","excitation",20.6158,0
+6,"He"," EXC  23P J=2,1,0                  ELOSS= 20.96409","excitation",20.9641,0
+7,"He"," EXC  21P J=1    RESONANT          ELOSS= 21.21802","excitation",21.218,0
+8,"He"," EXC  33S J=1                      ELOSS= 22.71847","excitation",22.7185,0
+9,"He"," EXC  31S J=0                      ELOSS= 22.92032","excitation",22.9203,0
+10,"He"," EXC  33P J=2,1,0                  ELOSS= 23.00707","excitation",23.0071,0
+11,"He"," EXC  33D J=3,2,1                  ELOSS= 23.07365","excitation",23.0737,0
+12,"He"," EXC  31D J=2                      ELOSS= 23.07407","excitation",23.0741,0
+13,"He"," EXC  31P J=1    RESONANT          ELOSS= 23.08702","excitation",23.087,0
+14,"He"," EXC  43S J=1                      ELOSS= 23.59396","excitation",23.594,0
+15,"He"," EXC  41S J=0                      ELOSS= 23.67357","excitation",23.6736,0
+16,"He"," EXC  43P J=2,1,0                  ELOSS= 23.70789","excitation",23.7079,0
+17,"He"," EXC  43D J=3,2,1                  ELOSS= 23.73609","excitation",23.7361,0
+18,"He"," EXC  41D J=2                      ELOSS= 23.73633","excitation",23.7363,0
+19,"He"," EXC  43F J=3,4,2                  ELOSS= 23.73701","excitation",23.737,0
+20,"He"," EXC  41F J=3                      ELOSS= 23.73701","excitation",23.737,0
+21,"He"," EXC  41P J=1    RESONANT          ELOSS= 23.74207","excitation",23.7421,0
+22,"He"," EXC  53S J=1                      ELOSS= 23.97197","excitation",23.972,0
+23,"He"," EXC  51S J=0                      ELOSS= 24.01121","excitation",24.0112,0
+24,"He"," EXC  53P J=2,1,0                  ELOSS= 24.02822","excitation",24.0282,0
+25,"He"," EXC  53D J=3,2,1                  ELOSS= 24.04266","excitation",24.0427,0
+26,"He"," EXC  51D J=2                      ELOSS= 24.04280","excitation",24.0428,0
+27,"He"," EXC  53F J=3,4,2                  ELOSS= 24.04315","excitation",24.0431,0
+28,"He"," EXC  513 J=3                      ELOSS= 24.04315","excitation",24.0431,0
+29,"He"," EXC  51P J=1    RESONANT          ELOSS= 24.04580","excitation",24.0458,0
+30,"He"," EXC  63S J=1                      ELOSS= 24.16900","excitation",24.169,0
+31,"He"," EXC  61S J=0                      ELOSS= 24.19116","excitation",24.1912,0
+32,"He"," EXC  63P J=2,1,0                  ELOSS= 24.20081","excitation",24.2008,0
+33,"He"," EXC  63D J=3,2,1                  ELOSS= 24.20916","excitation",24.2092,0
+34,"He"," EXC  61D J=2                      ELOSS= 24.20925","excitation",24.2092,0
+35,"He"," EXC  61P J=1    RESONANT          ELOSS= 24.21100","excitation",24.211,0
+36,"He"," EXC  73S J=1                      ELOSS= 24.28456","excitation",24.2846,0
+37,"He"," EXC  71S J=0                      ELOSS= 24.29828","excitation",24.2983,0
+38,"He"," EXC  73P J=2,1,0                  ELOSS= 24.30429","excitation",24.3043,0
+39,"He"," EXC  73D J=3,2,1                  ELOSS= 24.30954","excitation",24.3095,0
+40,"He"," EXC  71D J=2                      ELOSS= 24.30960","excitation",24.3096,0
+41,"He"," EXC  71P J=1    RESONANT          ELOSS= 24.31071","excitation",24.3107,0
+42,"He"," EXC  N3S SUM HIGH                 ELOSS= 24.35810","excitation",24.3581,0
+43,"He"," EXC  N1S SUM HIGH                 ELOSS= 24.36718","excitation",24.3672,0
+44,"He"," EXC  N3P SUM HIGH                 ELOSS= 24.37116","excitation",24.3712,0
+45,"He"," EXC  N3D SUM HIGH                 ELOSS= 24.37468","excitation",24.3747,0
+46,"He"," EXC  N1D SUM HIGH                 ELOSS= 24.37472","excitation",24.3747,0
+47,"He"," EXC  81P J=1    RESONANT          ELOSS= 24.37547","excitation",24.3755,0
+48,"He"," EXC  91P J=1    RESONANT          ELOSS= 24.41989","excitation",24.4199,0
+49,"He"," EXC 101P J=1    RESONANT          ELOSS= 24.45168","excitation",24.4517,0
+50,"He"," EXC 111P J=1    RESONANT          ELOSS= 24.47518","excitation",24.4752,0
+51,"He"," EXC 121P J=1    RESONANT          ELOSS= 24.49308","excitation",24.4931,0
+52,"He"," EXC  N1P SUM HI RESONANT          ELOSS= 24.50708","excitation",24.5071,0
+53,"CF4"," ELASTIC  ANISOTROPIC            CF4              ","elastic",0,0
+54,"CF4"," ION  CF3 +                      ELOSS=   15.70   ","ionisation",15.7,0
+55,"CF4"," ION  CF2 +                      ELOSS=   21.47   ","ionisation",21.47,0
+56,"CF4"," ION  CF +                       ELOSS=   29.14   ","ionisation",29.14,0
+57,"CF4"," ION  F +                        ELOSS=   34.5    ","ionisation",34.5,0
+58,"CF4"," ION  C +                        ELOSS=   34.77   ","ionisation",34.77,0
+59,"CF4"," DOUBLE ION    CF3 + , F +       ELOSS=   36.0    ","ionisation",36,0
+60,"CF4"," DOUBLE ION    CF2 + , F +       ELOSS=   40.0    ","ionisation",40,0
+61,"CF4"," IONS  CF3 ++ OR CF2 ++          ELOSS=   41.0    ","ionisation",41,0
+62,"CF4"," DOUBLE ION    CF +  , F +       ELOSS=   43.0    ","ionisation",43,0
+63,"CF4"," DOUBLE ION    C  +  , F +       ELOSS=   63.0    ","ionisation",63,0
+64,"CF4"," IONISATION   CARBON K-SHELL     ELOSS=  285.0    ","ionisation",285,0
+65,"CF4"," ATTACHMENT                                       ","attachment",0,0
+66,"CF4"," VIB  V2           ANISOTROPIC   ELOSS=   -0.0539 ","superelastic",-0.0539,0
+67,"CF4"," VIB  V2           ANISOTROPIC   ELOSS=    0.0539 ","inelastic",0.0539,0
+68,"CF4"," VIB  V4           ANISOTROPIC   ELOSS=   -0.0783 ","superelastic",-0.0783,0
+69,"CF4"," VIB  V4           ANISOTROPIC   ELOSS=    0.0783 ","inelastic",0.0783,0
+70,"CF4"," VIB  V1           ANISOTROPIC   ELOSS=   -0.1126 ","superelastic",-0.1126,0
+71,"CF4"," VIB  V1           ANISOTROPIC   ELOSS=    0.1126 ","inelastic",0.1126,0
+72,"CF4"," VIB  V3           ANISOTROPIC   ELOSS=   -0.1588 ","superelastic",-0.1588,0
+73,"CF4"," VIB  V3           ANISOTROPIC   ELOSS=    0.1588 ","inelastic",0.1588,0
+74,"CF4"," VIB 2V3           ANISOTROPIC   ELOSS=    0.3176 ","inelastic",0.3176,0
+75,"CF4"," VIB HARMONIC      ANISOTROPIC   ELOSS=    0.4764 ","inelastic",0.4764,0
+76,"CF4"," NEUTRAL DISS      NON-DIPOLE    ELOSS=   11.5    ","inelastic",11.5,0
+77,"CF4"," NEUTRAL DISS DIPOLE F=0.000189  ELOSS=   11.63   ","inelastic",11.63,0
+78,"CF4"," NEUTRAL DISS DIPOLE F=0.001085  ELOSS=   11.88   ","inelastic",11.88,0
+79,"CF4"," NEUTRAL DISS DIPOLE F=0.004807  ELOSS=   12.13   ","inelastic",12.13,0
+80,"CF4"," NEUTRAL DISS DIPOLE F=0.008819  ELOSS=   12.38   ","inelastic",12.38,0
+81,"CF4"," NEUTRAL DISS      NON-DIPOLE    ELOSS=   12.50   ","inelastic",12.5,0
+82,"CF4"," NEUTRAL DISS DIPOLE F=0.008918  ELOSS=   12.63   ","inelastic",12.63,0
+83,"CF4"," NEUTRAL DISS DIPOLE F=0.008420  ELOSS=   12.88   ","inelastic",12.88,0
+84,"CF4"," NEUTRAL DISS DIPOLE F=0.02531   ELOSS=   13.13   ","inelastic",13.13,0
+85,"CF4"," NEUTRAL DISS DIPOLE F=0.09553   ELOSS=   13.38   ","inelastic",13.38,0
+86,"CF4"," NEUTRAL DISS DIPOLE F=0.11193   ELOSS=   13.63   ","inelastic",13.63,0
+87,"CF4"," NEUTRAL DISS DIPOLE F=0.10103   ELOSS=   13.88   ","inelastic",13.88,0
+88,"CF4"," NEUTRAL DISS      NON-DIPOLE    ELOSS=   14.00   ","inelastic",14,0
+89,"CF4"," NEUTRAL DISS DIPOLE F=0.06902   ELOSS=   14.13   ","inelastic",14.13,0
+90,"CF4"," NEUTRAL DISS DIPOLE F=0.03968   ELOSS=   14.38   ","inelastic",14.38,0
+91,"CF4"," NEUTRAL DISS DIPOLE F=0.02584   ELOSS=   14.63   ","inelastic",14.63,0
+92,"CF4"," NEUTRAL DISS DIPOLE F=0.02071   ELOSS=   14.88   ","inelastic",14.88,0
+93,"CF4"," NEUTRAL DISS DIPOLE F=0.03122   ELOSS=   15.13   ","inelastic",15.13,0
+94,"CF4"," NEUTRAL DISS DIPOLE F=0.05580   ELOSS=   15.38   ","inelastic",15.38,0
+95,"CF4"," NEUTRAL DISS DIPOLE F=0.10187   ELOSS=   15.63   ","inelastic",15.63,0
+96,"CF4"," NEUTRAL DISS DIPOLE F=0.09427   ELOSS=   15.88   ","inelastic",15.88,0
+97,"CF4"," NEUTRAL DISS DIPOLE F=0.05853   ELOSS=   16.13   ","inelastic",16.13,0
+98,"CF4"," NEUTRAL DISS DIPOLE F=0.06002   ELOSS=   16.38   ","inelastic",16.38,0
+99,"CF4"," NEUTRAL DISS DIPOLE F=0.05647   ELOSS=   16.63   ","inelastic",16.63,0
+100,"CF4"," NEUTRAL DISS DIPOLE F=0.04885   ELOSS=   16.88   ","inelastic",16.88,0
+101,"CF4"," NEUTRAL DISS DIPOLE F=0.04036   ELOSS=   17.13   ","inelastic",17.13,0
+102,"CF4"," NEUTRAL DISS DIPOLE F=0.03298   ELOSS=   17.38   ","inelastic",17.38,0
+103,"CF4"," NEUTRAL DISS DIPOLE F=0.02593   ELOSS=   17.63   ","inelastic",17.63,0
+104,"CF4"," NEUTRAL DISS DIPOLE F=0.01802   ELOSS=   17.88   ","inelastic",17.88,0
+105,"CF4"," NEUTRAL DISS DIPOLE F=0.01287   ELOSS=   18.13   ","inelastic",18.13,0
+106,"CF4"," NEUTRAL DISS DIPOLE F=0.00830   ELOSS=   18.38   ","inelastic",18.38,0
+107,"CF4"," NEUTRAL DISS DIPOLE F=0.00698   ELOSS=   18.63   ","inelastic",18.63,0
+108,"CF4"," NEUTRAL DISS DIPOLE F=0.00581   ELOSS=   18.88   ","inelastic",18.88,0
+109,"CF4"," NEUTRAL DISS DIPOLE F=0.00502   ELOSS=   19.13   ","inelastic",19.13,0
+110,"CF4"," NEUTRAL DISS DIPOLE F=0.00398   ELOSS=   19.38   ","inelastic",19.38,0
+111,"CF4"," NEUTRAL DISS DIPOLE F=0.00189   ELOSS=   19.63   ","inelastic",19.63,0
