@@ -1,142 +1,293 @@
-# electricFieldUniform_multithread
+# secondaryAvalanches
 
-Microscopic electron-avalanche simulations in a **uniform electric field** using
-[Garfield++](https://garfieldpp.docs.cern.ch/), Magboltz and ROOT.
+Microscopic simulation of **primary and photon-induced secondary electron avalanches** in a uniform electric field using [Garfield++](https://garfieldpp.docs.cern.ch/), Magboltz and ROOT.
+
+The project starts from microscopic electron avalanches, generates photons from the recorded collision populations, transports the relevant photons through the gas, applies gas photoabsorption/photoionisation and cathode quantum efficiency, and iterates the resulting feedback electrons over successive avalanche generations.
 
 The project provides:
 
-- a C++ microscopic avalanche simulator (`uniformE.cxx`);
-- automatic campaigns driven by YAML files;
-- two campaign modes: **target gain** and **fixed electric field**;
-- adaptive statistics and parallel execution;
-- optional charged-ring space charge;
-- optional Magboltz transport quantities;
-- compact excitation-position histograms;
-- live avalanche GIFs with optional ion motion and space-charge maps;
-- a PySide6 graphical interface for campaigns and GIF generation.
+- a C++17 simulator, `secondaryAvalanches.cxx`;
+- microscopic electron avalanches with `Garfield::AvalancheMicroscopic`;
+- photon generation from the project kinetic/spectral model and CSV parameters;
+- photon transport through Garfield++ with gas absorption and photoionisation;
+- cathode photoelectron production using a wavelength-dependent QE model;
+- iterative secondary-avalanche chains from cathode photoelectrons and gas-photoionisation electrons;
+- fixed-field and target-gain campaigns driven by YAML;
+- parallel campaign execution and a PySide6 campaign interface;
+- ROOT outputs containing the primary avalanche, total feedback gain, avalanche genealogy, photon spectra, interaction positions and time structure;
+- effectively infinite parallel electrodes in the transverse directions;
+- a prompt-time view for the primary avalanche and a long-time view for delayed feedback.
+
+GIF generation is not part of this project.
 
 ---
 
 ## Contents
 
-1. [Physics and geometry](#physics-and-geometry)
-2. [Repository structure](#repository-structure)
-3. [Requirements](#requirements)
-4. [Installation](#installation)
-5. [Quick start](#quick-start)
-6. [Graphical interface](#graphical-interface)
-7. [Campaigns](#campaigns)
-8. [Target-gain campaigns](#target-gain-campaigns)
-9. [Fixed-field campaigns](#fixed-field-campaigns)
-10. [Runtime options](#runtime-options)
-11. [GIF generation](#gif-generation)
-12. [Supported mixtures](#supported-mixtures)
-13. [Adding a new mixture](#adding-a-new-mixture)
-14. [Extending the project to new cases](#extending-the-project-to-new-cases)
-15. [Output files](#output-files)
-16. [ROOT contents](#root-contents)
-17. [Magboltz transport quantities](#magboltz-transport-quantities)
-18. [Performance recommendations](#performance-recommendations)
-19. [Troubleshooting](#troubleshooting)
+1. [Physics workflow](#physics-workflow)
+2. [Gain definitions](#gain-definitions)
+3. [Geometry](#geometry)
+4. [Repository structure](#repository-structure)
+5. [Requirements](#requirements)
+6. [Required Garfield++ interface](#required-garfield-interface)
+7. [Installation](#installation)
+8. [Quick start](#quick-start)
+9. [Campaign configuration](#campaign-configuration)
+10. [Photon and feedback options](#photon-and-feedback-options)
+11. [Campaign modes](#campaign-modes)
+12. [Output files](#output-files)
+13. [ROOT contents](#root-contents)
+14. [Understanding `mc_samples`](#understanding-mc_samples)
+15. [Performance recommendations](#performance-recommendations)
+16. [Troubleshooting](#troubleshooting)
+17. [Scope and limitations](#scope-and-limitations)
 
 ---
 
-## Physics and geometry
+## Physics workflow
 
-The simulation uses `Garfield::AvalancheMicroscopic` with a
-`Garfield::MediumMagboltz` gas in a uniform electric field.
+For every primary electron, the simulation performs the following chain.
 
-The geometry convention is:
+### 1. Primary microscopic avalanche
 
-- anode at `z = 0`;
-- cathode/top plane at `z = gap`;
-- primary electrons launched at `z = gap`;
-- multiplication distance equal to the physical gap;
-- simulation height equal to `height_factor × gap`;
-- transverse simulation and histogram limits:
+A primary electron is launched at the cathode plane and transported towards the anode with `Garfield::AvalancheMicroscopic`.
 
-  ```text
-  x, y in [-2 × gap, +2 × gap]
-  ```
+The simulation records:
 
-The initial transverse position of each primary electron is sampled uniformly in
-`[-gap, +gap]`.
+- final electron and ion counts;
+- electron endpoints and times;
+- Magboltz collision levels;
+- optional excitation positions and `z-t` correlations;
+- the collision sites required by the photon-emission model.
 
-The simulated gain is the mean number of final electrons per primary electron:
-
-```math
-G = \langle n_e \rangle.
-```
-
-The effective Townsend coefficient inferred from the avalanche is
-
-```math
-\alpha_{\mathrm{eff}} = \frac{\ln G}{d},
-```
-
-where `d` is the physical gap in centimetres.
-
-For gain prediction across pressure, the campaign runner fits the reduced model
-
-```math
-\frac{\alpha_{\mathrm{eff}}}{p}
-=
-A\left(\frac{E}{p}\right)^m
-\exp\left[-\left(\frac{B}{E/p}\right)^n\right].
-```
-
-Each fit family is defined by:
+The primary avalanche is assigned feedback generation
 
 ```text
-mixture + additive fraction + gap + space-charge state
+0
 ```
 
-Pressures are combined through the reduced variables `E/p` and
-`alpha_eff/p`.
+### 2. Photon generation
 
-### Space-charge approximation
+`PhotonModel` converts the avalanche collision populations into kinetic emission components using the files under:
 
-When space charge is enabled, positive ions produced by previous primary
-electrons are accumulated as charged rings using
-`Garfield::ComponentChargedRing`. These rings modify the field seen by later
-primary avalanches in the same simulation.
+```text
+data/parameters/
+```
 
-This is a low-cost charged-ring approximation. It is not a full microscopic
-positive-ion transport simulation.
+For each component, the code samples:
 
-In GIF mode, positive ions may additionally be moved with a user-defined
-constant velocity. That velocity is a **visualisation parameter only** and must
-not be interpreted as a measured or predicted ion mobility.
+- emission position from the relevant microscopic collision sites;
+- wavelength from the configured spectral model;
+- emission delay from the component lifetime;
+- the expected number of emitted photons.
+
+The complete generated spectrum is always stored in `hSpectra`, including photons that are not subsequently transported.
+
+### 3. Automatic photoelectric threshold
+
+With
+
+```yaml
+propagate_only_above_phit: true
+```
+
+the effective photon-transport threshold is
+
+```text
+effective cut = max(photon_transport_cut_ev, PhiT)
+```
+
+where `PhiT` is obtained from the same QE material/model used to generate cathode photoelectrons.
+
+Therefore, the simulation retains the full emitted spectrum but transports only photons satisfying
+
+```text
+E_gamma > PhiT
+```
+
+when the automatic threshold is enabled.
+
+### 4. Photon propagation
+
+With
+
+```yaml
+photo_absorption: true
+```
+
+photons are transported using Garfield++ optical cross sections through `AvalancheMicroscopic::TransportPhotonExternal`.
+
+A transported photon may:
+
+- be absorbed without ionising the gas;
+- photoionise the gas and create one or more electron seeds;
+- reach the cathode;
+- reach the anode;
+- leave the numerical optical volume;
+- fail transport because no valid optical result is available.
+
+With
+
+```yaml
+photo_absorption: false
+```
+
+the code uses isotropic ballistic propagation to the parallel-plane boundaries and does not simulate gas absorption.
+
+### 5. Cathode photoelectrons
+
+For a photon reaching the cathode, `QuantumEfficiency` evaluates the selected material/model at the photon wavelength.
+
+A cathode electron is produced according to:
+
+- the wavelength-dependent quantum efficiency;
+- the configured electron-extraction efficiency;
+- the photoelectron energy model.
+
+Accepted cathode electrons are inserted into the avalanche queue as generation `g + 1`.
+
+### 6. Gas-photoionisation electrons
+
+When Garfield++ classifies an optical interaction as photoionisation, the generated gas electrons can be transported as new avalanche seeds when
+
+```yaml
+propagate_photoionisation_electrons: true
+```
+
+These electrons are also assigned generation `g + 1`.
+
+### 7. Iterative feedback chain
+
+The queue is processed until no seeds remain or a safety limit is reached:
+
+```yaml
+max_feedback_generations: 5
+max_avalanches_per_primary: 10000
+max_mc_photons_per_primary: 100000000
+```
+
+Seed types stored in `dataPerAvalanche` are:
+
+```text
+0 = primary electron
+1 = cathode photoelectron
+2 = gas-photoionisation electron
+```
+
+---
+
+## Gain definitions
+
+The simulation distinguishes the primary avalanche from the complete feedback chain.
+
+For each initial electron:
+
+```text
+nePrimaryAvalanche
+```
+
+contains only the generation-0 avalanche, while
+
+```text
+ne
+neTotalWithFeedback
+```
+
+contain the sum of all avalanches initiated by that primary electron.
+
+The corresponding mean gains are therefore
+
+```math
+G_{\mathrm{primary}} = \left\langle n_{e,\,g=0} \right\rangle
+```
+
+and
+
+```math
+G_{\mathrm{total}} = \left\langle \sum_g n_{e,g} \right\rangle.
+```
+
+The campaign runner uses the `ne` branch of `dataPerPrimaryElectron`; consequently, the gain displayed by the campaign is the **total gain including feedback**. When no secondary avalanche occurs, primary and total gains are identical.
+
+---
+
+## Geometry
+
+The uniform-field convention is:
+
+```text
+anode:   z = 0
+cathode: z = gap
+```
+
+Primary electrons start at the cathode and drift towards the anode.
+
+### Infinite parallel electrodes
+
+For the uniform-field studies, the recommended configuration is:
+
+```yaml
+infinite_electrodes: true
+optical_half_width_gaps: 100.0
+```
+
+In this mode:
+
+- the cathode and anode are treated as physically infinite in `x/y`;
+- there are no physical lateral walls in the analytic propagation;
+- the finite Garfield++ transverse area is only a numerical safety volume;
+- the numerical half-width is `optical_half_width_gaps × gap`.
+
+For a `0.150 mm` gap and `optical_half_width_gaps: 100`, the optical volume has a half-width of `15 mm`.
+
+A photon intersecting `z = gap` is classified as a cathode impact, and a photon intersecting `z = 0` is classified as an anode impact. Lateral losses should therefore be negligible except for numerical boundary cases in Garfield++ transport.
+
+### Finite-electrode mode
+
+When
+
+```yaml
+infinite_electrodes: false
+```
+
+`transport_half_size_cm` and `cathode_half_size_cm` define finite transverse limits. This mode should only be used when a finite optical aperture is physically intended.
 
 ---
 
 ## Repository structure
 
-A typical repository should contain:
-
 ```text
 .
 ├── CMakeLists.txt
-├── uniformE.cxx               # Garfield++ microscopic simulation
-├── run_campaign.py            # YAML campaigns and GIF command-line runner
-├── alpha_model.py             # progressive alpha/p models and validation
-├── fit_diagnostics.py         # auditable PDF diagnostics
-├── gui.py                     # PySide6 interface
-├── run_gui.sh                 # stable GUI launcher
-├── campaign.yaml              # user campaign configuration
-├── .venv/                     # local Python environment
-├── build/                     # automatically regenerated CMake build
-├── fits/                      # fit PDFs only (no PNG diagnostics)
+├── secondaryAvalanches.cxx       # integrated avalanche/photon/feedback simulator
+├── run_campaign.py               # YAML campaign runner
+├── gui.py                        # PySide6 campaign interface
+├── run_gui.sh                    # stable GUI launcher
+├── campaign.yaml                 # active campaign configuration
+├── alpha_model.py                # target-gain predictor
+├── fit_diagnostics.py            # PDF fit diagnostics
+├── requirements.txt
+├── src/
+│   └── aux/
+│       ├── PhotonModel.hh
+│       ├── PhotonModel.cxx
+│       ├── QuantumEfficiency.hh
+│       └── QuantumEfficiency.cxx
+├── data/
+│   ├── levels/                   # Magboltz-level mappings
+│   ├── parameters/               # kinetic and spectral photon parameters
+│   └── qe/
+│       └── qe_materials.csv      # material-dependent QE data
+├── build/                        # regenerated CMake build
+├── fits/                         # target-gain fit PDFs
 └── outputs/
-    ├── roots/                 # production ROOT files
-    ├── alpha/                 # alpha-model JSON files
-    ├── gifs/                  # generated GIFs
-    └── legacy_roots/          # incompatible/old ROOT schemas, when applicable
+    ├── roots/                    # production ROOT files
+    ├── alpha/                    # machine-readable alpha fits
+    ├── metadata/                 # campaign-attempt log
+    └── legacy_roots/             # incompatible previous ROOT schemas
 ```
 
-Use `run_gui.sh` as the normal entry point. The campaign runner recreates the
-CMake build directory before running, ensuring that the executable corresponds
-to the current `uniformE.cxx`.
+`uniformE.cxx` may remain in the repository as historical/reference code, but the production executable is built from `secondaryAvalanches.cxx`.
 
 ---
 
@@ -144,51 +295,96 @@ to the current `uniformE.cxx`.
 
 ### C++ and scientific software
 
-- Linux is the primary supported platform.
-- A C++17-capable compiler.
-- A Fortran compiler for Magboltz/Garfield++ builds.
-- CMake 3.12 or newer.
-- ROOT.
-- Garfield++ with Magboltz.
-- GNU Scientific Library (GSL).
-
-The official Garfield++ installation documentation lists a C++ compiler, a
-Fortran compiler, ROOT, GSL and CMake as prerequisites:
-
-- https://garfieldpp.docs.cern.ch/install/
-
-ROOT installation instructions:
-
-- https://root.cern/install/
-- https://root.cern/install/dependencies/
+- Linux as the primary supported platform;
+- a C++17 compiler;
+- a Fortran compiler for Garfield++/Magboltz;
+- CMake 3.16 or newer;
+- ROOT with `Core`, `RIO`, `Tree`, `Hist` and `MathCore`;
+- Garfield++ with Magboltz;
+- GSL and the usual Garfield++ build dependencies.
 
 ### Python
 
 Recommended: Python 3.10 or newer in a virtual environment.
 
-Required Python packages:
+Required packages:
 
 ```text
+PySide6
 numpy
-scipy
 uproot
 PyYAML
-PySide6
 matplotlib
 ```
 
-Qt recommends using PySide6 inside a virtual environment rather than installing
-it globally:
+`matplotlib` is only required for PDF fit diagnostics. The physical simulations can run without generating those PDFs.
 
-- https://doc.qt.io/qtforpython-6/quickstart.html
+---
+
+## Required Garfield++ interface
+
+The integrated photon study calls a public wrapper named
+
+```cpp
+TransportPhotonExternal(...)
+```
+
+which forwards to Garfield++'s internal `TransportPhoton` implementation.
+
+Add the following method to:
+
+```text
+<garfield-source>/Include/Garfield/AvalancheMicroscopic.hh
+```
+
+inside the public section, immediately before `private:`:
+
+```cpp
+/// Transport a photon supplied externally.
+void TransportPhotonExternal(const double x, const double y,
+                             const double z, const double t,
+                             const double e, const std::size_t w,
+                             std::vector<Seed>& stack) {
+  TransportPhoton(x, y, z, t, e, w, stack);
+}
+```
+
+Keep the original private declaration unchanged:
+
+```cpp
+void TransportPhoton(const double x, const double y, const double z,
+                     const double t, const double e, const std::size_t w,
+                     std::vector<Seed>& stack);
+```
+
+Reinstall the modified header:
+
+```bash
+cd ~/garfield
+cmake --install build --prefix ~/garfield/install
+```
+
+Verify both source and installed copies:
+
+```bash
+grep -n "TransportPhotonExternal" \
+  ~/garfield/Include/Garfield/AvalancheMicroscopic.hh \
+  ~/garfield/install/include/Garfield/AvalancheMicroscopic.hh
+```
+
+The production code must call:
+
+```cpp
+photon_transport.TransportPhotonExternal(...);
+```
 
 ---
 
 ## Installation
 
-### 1. Install basic system tools
+### 1. Install basic tools
 
-Example for Debian/Ubuntu-based systems:
+Example for Ubuntu/Debian:
 
 ```bash
 sudo apt update
@@ -203,801 +399,292 @@ sudo apt install -y \
   git
 ```
 
-Install ROOT and Garfield++ following their official instructions. Binary ROOT
-packages are often the simplest option, while Garfield++ can be built and
-installed with CMake.
+Install ROOT and Garfield++ following their official documentation.
 
-### 2. Configure ROOT
-
-Before configuring this project, ROOT must be available in the shell:
+### 2. Load ROOT
 
 ```bash
 source /path/to/root/bin/thisroot.sh
-```
-
-Verify it:
-
-```bash
 root-config --version
 ```
 
-`run_gui.sh` also tries the common paths:
+`run_gui.sh` also checks common locations such as:
 
 ```text
 $HOME/root-install/bin/thisroot.sh
 /opt/root/bin/thisroot.sh
 ```
 
-If ROOT is installed elsewhere, source its `thisroot.sh` before launching the
-GUI or edit the launcher.
-
-### 3. Make Garfield++ discoverable by CMake
-
-If Garfield++ is not installed in a standard prefix, add its installation
-prefix to `CMAKE_PREFIX_PATH`:
+### 3. Make Garfield++ discoverable
 
 ```bash
-export CMAKE_PREFIX_PATH="/path/to/garfield-install:${CMAKE_PREFIX_PATH:-}"
-```
-
-If the Garfield++ shared library directory is not already known to the dynamic
-linker, also use:
-
-```bash
-export LD_LIBRARY_PATH="/path/to/garfield-install/lib:${LD_LIBRARY_PATH:-}"
-```
-
-The project uses:
-
-```cmake
-find_package(Garfield REQUIRED)
-target_link_libraries(uniformE Garfield::Garfield ROOT::Tree)
+export CMAKE_PREFIX_PATH="$HOME/garfield/install:${CMAKE_PREFIX_PATH:-}"
+export LD_LIBRARY_PATH="$HOME/garfield/install/lib:${LD_LIBRARY_PATH:-}"
 ```
 
 ### 4. Create the Python environment
-
-From the repository root:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install numpy scipy uproot PyYAML PySide6
+python3 -m pip install -r requirements.txt
 ```
 
-### 5. Make the launcher executable
+### 5. Build
 
 ```bash
-chmod +x run_gui.sh
-```
-
-### 6. Test a manual build
-
-The GUI builds automatically, but a manual test is useful after installation:
-
-```bash
-cmake -S . -B build
+rm -rf build
+cmake -S . -B build \
+  -DCMAKE_PREFIX_PATH="$HOME/garfield/install"
 cmake --build build -j2
 ```
 
-If CMake cannot locate Garfield++, confirm `CMAKE_PREFIX_PATH` and the Garfield++
-installation.
+The executable is:
+
+```text
+build/secondaryAvalanches
+```
 
 ---
 
 ## Quick start
 
-Always open the application from the repository root with:
+### Graphical interface
+
+Launch from the repository root:
 
 ```bash
+chmod +x run_gui.sh
 ./run_gui.sh
 ```
 
-Do not normally start it with `python3 gui.py`. The launcher deliberately:
+The interface provides:
 
-1. activates `.venv`;
-2. loads ROOT when needed;
-3. selects the Qt libraries bundled with PySide6;
-4. preserves the existing ROOT/Garfield++ library paths;
-5. opens the GUI from the correct project directory.
-
-This avoids common Qt conflicts such as incompatible system and PySide6
-`libQt6DBus` libraries.
-
-For a first test:
-
-1. Open the **Campaign** tab.
-2. Load or paste a small fixed-field YAML campaign.
-3. Keep **Space charge** disabled.
-4. Keep **Magboltz transport** disabled for the quickest test.
-5. Keep **Excitation positions** enabled if `hExcXYZ` and `hExcZT` are needed.
-6. Click **Run campaign**.
-
----
-
-## Graphical interface
-
-The GUI has two tabs.
-
-### Campaign tab
-
-The Campaign tab provides:
-
-- YAML editor;
-- open/save YAML buttons;
-- runtime switches;
-- automatic CMake configuration and build;
-- one table row per active or completed simulation;
-- measured field and gain;
-- number of primary electrons;
-- per-job progress;
+- an editable YAML campaign;
+- campaign open/save controls;
+- excitation-position and Magboltz-transport switches;
+- automatic CMake configuration and compilation;
+- one table row per simulation;
+- requested and measured electric field;
+- measured total gain;
+- primary-electron progress;
 - status and error details;
-- stop button.
+- campaign stop control;
+- access to the fit directory.
 
-The runtime switches are intentionally controlled by checkboxes instead of being
-duplicated in the YAML editor:
+There is no GIF tab or GIF-generation workflow.
 
-- **Space charge**
-- **Excitation positions**
-- **Magboltz transport**
-
-### GIF tab
-
-The GIF tab allows selection of:
-
-- mixture;
-- additive fraction;
-- pressure;
-- gap;
-- geometry height factor;
-- number of primary electrons;
-- electric field or target gain;
-- maximum animation time;
-- number of frames;
-- ion movement;
-- constant visual ion speed;
-- space charge.
-
----
-
-## Campaigns
-
-Campaigns are described with YAML files. YAML comments begin with `#` and are
-ignored:
-
-```yaml
-# This line is a comment.
-workers: 2  # Inline comments are also valid.
-```
-
-Two scan modes are available:
-
-```yaml
-scan_mode: gain
-```
-
-or
-
-```yaml
-scan_mode: field
-```
-
-The two modes have deliberately different behaviour.
-
-| Mode | Input | Result | Automatic refinement |
-|---|---|---|---|
-| `gain` | target gains | electric fields producing those gains | yes |
-| `field` | fixed electric fields | measured gains | no |
-
-Run a campaign without the GUI with:
+### Command line
 
 ```bash
 source .venv/bin/activate
 python3 run_campaign.py campaign.yaml
 ```
 
-The command-line runtime flags can override the YAML/default state:
-
-```bash
-python3 run_campaign.py campaign.yaml \
-  --no-space-charge \
-  --excitation-positions \
-  --no-gas-transport
-```
+The runner rebuilds the executable unless explicitly instructed otherwise by its command-line options.
 
 ---
 
-## Target-gain campaigns
+## Campaign configuration
 
-A target-gain campaign requests gains and lets the runner determine the required
-electric fields.
-
-Example:
-
-```yaml
-scan_mode: gain
-
-mixtures:
-  ArCF4: [0, 0.1, 0.5, 1, 2, 5, 10, 20, 30, 50, 80, 100]
-  # ArN2: [0, 0.1, 0.5, 1, 2, 5, 10, 20, 30, 50, 80, 100]
-  # ArCO2: [0, 1, 10, 30, 100]
-  # ArCH4: [0, 1, 10, 30, 100]
-  # ArIso: [0, 1, 10, 30, 100]
-  # ArC2H2F4: [0, 1, 10, 30, 100]
-
-pressures_bar: [0.05, 0.5, 1, 2, 5, 10]
-
-gaps_mm:
-  0.05: [1.2, 2, 5, 10, 20, 50, 100, 200]
-  # 0.50: [1.2, 2, 5, 10, 20, 50, 100]
-  # 1.00: [1.2, 2, 5, 7, 10, 20, 30]
-
-gain_tolerance: 0.05
-workers: 2
-```
-
-Interpretation:
-
-```yaml
-gaps_mm:
-  0.05: [2, 10, 100]
-```
-
-means:
-
-- physical gap: `0.05 mm`;
-- target gains: `2`, `10` and `100`.
-
-A result is accepted when
-
-```math
-\frac{|G_{\mathrm{measured}}-G_{\mathrm{target}}|}
-{G_{\mathrm{target}}}
-\leq \texttt{gain\_tolerance}.
-```
-
-The runner:
-
-1. loads every compatible existing ROOT point;
-2. statistically combines repeated runs at the same physical `(p, gap, E)` point;
-3. selects the simplest supported model in the hierarchy Townsend 2p → 3p → 4p;
-4. validates candidate models in gain space before allowing them to seed a scan;
-5. uses a monotonic same-pressure controller for the actual refinement;
-6. runs `uniformE`, measures the gain and immediately rebuilds the fit;
-7. regenerates the corresponding PDF under `fits/`;
-8. refines until the target is accepted.
-
-The global alpha model is only a seed/predictor. Once a pressure has measured
-points, the local controller has priority. The newest attempt for an exact
-target imposes the sign of the next step: an overshoot can never increase the
-field and an undershoot can never decrease it. This state is reconstructed from
-`outputs/metadata/campaign_attempts.jsonl` after a restart.
-
-The fit parameters are stored under:
-
-```text
-outputs/alpha/<mixture>/gap_<gap>mm.json
-```
-
-Space-charge and non-space-charge families are kept separate.
-
-### Fit PDFs
-
-Every fit is regenerated after each successfully saved ROOT:
-
-```text
-fits/<mixture>/gap_<gap>mm/<composition>.pdf
-```
-
-Each PDF contains:
-
-- every individual ROOT used by the family;
-- the statistically combined unique `(p, E)` points and their uncertainties;
-- measured gain versus field on a logarithmic gain axis;
-- `alpha_eff/p` versus `E/p`;
-- gain-space residuals `ln(G_pred/G_measured)`;
-- the electric field predicted continuously from gain `1` to gain `10^7`;
-- solid curves inside the measured reduced-field interval and dashed
-  extrapolations outside it;
-- the complete numerical table of points entering the fit;
-- the 2p/3p/4p model comparison, cross-validation factors and rejection reasons.
-
-Regenerate every PDF without running a campaign with:
-
-```bash
-python3 fit_diagnostics.py --all
-```
-
-The GUI provides **Open fits/** and **Open selected fit** buttons.
-
-### Per-composition gain sets
-
-The classic `mixtures + pressures_bar + gaps_mm` format remains supported. For
-campaigns where each composition needs different pressures, gaps or gain
-targets, use `gain_sets`:
-
-```yaml
-scan_mode: gain
-
-gain_sets:
-  - components: {ar: 90, cf4: 10}
-    pressures_bar: [1]
-    gap_mm: 0.150
-    gain_targets: [10, 100, 1000]
-
-  - components: {ar: 95, cf4: 3, iso: 2}
-    pressures_bar: [0.5, 1]
-    gaps_mm: [0.050, 0.150]
-    gain_targets: [10, 100]
-
-gain_tolerance: 0.05
-workers: 2
-```
-
-`gap_mm` accepts one gap and `gaps_mm` accepts a list. `gain_target` is also
-accepted as an alias of `gain_targets`.
-
-### Adaptive statistics
-
-Gain campaigns use adaptive primary-electron statistics. Low-gain, short-gap
-points can use more primaries than expensive high-gain points. A simulation may
-stop before its maximum `npe` when the requested statistical precision is
-reached.
-
-The GUI progress value is relative to the maximum allowed number of primaries,
-not an exact estimate of the remaining wall time.
-
-### Recommended campaign strategy
-
-Do not begin with every mixture, pressure and gap at once. A safer sequence is:
-
-1. one mixture;
-2. one gap, preferably `0.05 mm`;
-3. a reduced concentration grid;
-4. `workers: 1` or `workers: 2`;
-5. verify the field predictor and ROOT schema;
-6. expand the grid.
-
----
-
-## Fixed-field campaigns
-
-A fixed-field campaign runs exactly the fields requested. It does not invoke the
-gain predictor and does not refine the field.
-
-Minimal example:
+The following is the project baseline for the current Ar–CF4 secondary-avalanche study:
 
 ```yaml
 scan_mode: field
+measure_gas_transport: false
+record_excitation_positions: true
+space_charge: false
 
-mixtures:
-  ArCF4: [1]
+# Integrated photon generation, Garfield++ transport and feedback chain.
+parameters_dir: data/parameters
+mc_samples: 10
+random_seed: 12345
+photo_absorption: true
+# Keep the full spectrum, but only transport photons with E_gamma > PhiT.
+# PhiT is read automatically from the selected QE material/model.
+propagate_only_above_phit: true
+photon_transport_cut_ev: 0.0
 
-pressures_bar: [1]
+# Parallel plates are treated as effectively infinite in x/y. The finite
+# Garfield++ area is only a numerical safety box, with a half-width of 100 gaps.
+infinite_electrodes: true
+optical_half_width_gaps: 100.0
 
-fields_kv_cm:
-  0.05: [35]
-
-npe: 100
-workers: 1
-```
-
-This simulates:
-
-```text
-Ar 99% + CF4 1%
-p = 1 bar
-gap = 0.05 mm
-E = 35 kV/cm
-100 primary electrons
-```
-
-A larger scan can be written as:
-
-```yaml
-scan_mode: field
-
-mixtures:
-  ArCF4: [0, 1, 10, 50, 100]
-  ArC2H2F4: [1, 10, 50, 100]
-
-pressures_bar: [0.5, 1, 2]
-
-fields_kv_cm:
-  0.05: [20, 25, 30, 35, 40, 50]
-  0.50: [5, 10, 15, 20]
-
-npe: 100
-workers: 2
-```
-
-The keys under `fields_kv_cm` are gaps in millimetres. The lists contain fields
-in `kV/cm`. This classic product-grid format remains fully supported.
-
-When each composition needs its own fields, use `field_sets`:
-
-```yaml
-scan_mode: field
+# Keep the long optical window for delayed feedback, but use this prompt
+# window for the main electron-endpoint histogram so the primary peak is visible.
+prompt_time_max_ns: 10.0
+qe_material: stainless_steel # Ti
+qe_csv: data/qe/qe_materials.csv
+qe_model: measured_extended
+electron_extraction_efficiency: 1.0
+propagate_photoionisation_electrons: true
+max_feedback_generations: 5
+max_avalanches_per_primary: 10000
+max_mc_photons_per_primary: 100000000
 
 field_sets:
   - components: {ar: 90, cf4: 10}
     pressures_bar: [1]
     gap_mm: 0.150
     reference_field_kv_cm: 39.8
-    field_scales: [1.0, 0.9, 0.75, 0.5]
+    field_scales: [1.1, 1.0, 0.75]
 
-  - components: {ar: 95, cf4: 3, iso: 2}
+  - components: {ar: 85, cf4: 15}
     pressures_bar: [1]
     gap_mm: 0.150
-    fields_kv_cm: [29, 26.1, 21.75, 14.5]
+    reference_field_kv_cm: 43
+    field_scales: [1.1, 1.0, 0.75]
 
-npe: 100
+  - components: {ar: 80, cf4: 20}
+    pressures_bar: [1]
+    gap_mm: 0.150
+    reference_field_kv_cm: 44
+    field_scales: [1.1, 1.0, 0.75]
+
+npe: 5
 workers: 2
 ```
 
-Each set accepts either:
+For statistically meaningful secondary-avalanche distributions, increase `npe`. Five primaries are useful only as a fast functional test and can easily produce zero photoelectrons when the QE is small.
 
-- `fields_kv_cm`, containing the explicit fields; or
-- `reference_field_kv_cm` together with `field_scales`.
+---
 
-`gap_mm` accepts one gap and `gaps_mm` accepts a list. Top-level `npe` applies
-to every set, while a set may override it with its own `npe`.
+## Photon and feedback options
 
-Instead of a fixed `npe`, field mode may use:
+### `parameters_dir`
+
+Directory containing the kinetic and spectral parameter files used by `PhotonModel`.
 
 ```yaml
-min_npe: 20
-max_npe: 1000
-target_relative_error: 0.03
+parameters_dir: data/parameters
 ```
 
-The simulation then stops once the relative statistical error of the mean gain
-reaches the requested value, after at least `min_npe` primaries.
-
----
-
-## Runtime options
-
-### Space charge
-
-GUI checkbox:
-
-```text
-Space charge
-```
-
-CLI:
-
-```bash
---space-charge
---no-space-charge
-```
-
-When enabled, ions from earlier primary avalanches are retained as charged rings
-and modify subsequent avalanches. This changes the gain physics, so the campaign
-stores a separate alpha-fit family.
-
-Space charge is significantly more expensive and should normally be disabled
-while developing or validating a campaign.
-
-### Excitation positions
-
-GUI checkbox:
-
-```text
-Excitation positions
-```
-
-CLI:
-
-```bash
---excitation-positions
---no-excitation-positions
-```
-
-When enabled, the ROOT contains `hExcXYZ` and `hExcZT`. Disabling it reduces
-output size and some filling overhead, while retaining `hLevels`.
-
-### Magboltz transport
-
-GUI checkbox:
-
-```text
-Magboltz transport
-```
-
-CLI:
-
-```bash
---gas-transport
---no-gas-transport
-```
-
-When enabled, a Magboltz transport table is generated at the simulation field and
-the macroscopic quantities in `gasData` are filled.
-
-This can be much slower than the avalanche-only calculation. For ordinary gain
-searches, keep it **disabled** unless the transport quantities are required in
-every ROOT. It is often more efficient to enable it only for final selected
-points or for a dedicated fixed-field campaign.
-
----
-
-## GIF generation
-
-GIFs animate the first primary avalanche and use two panels:
-
-- left: electron avalanche and optional positive-ion markers;
-- right: base potential or the space-charge potential perturbation.
-
-The transverse display uses:
-
-```text
-x in [-2 × gap, +2 × gap]
-```
-
-and the vertical axis covers the physical gap.
-
-GIFs are written to:
-
-```text
-outputs/gifs/
-```
-
-### Generate a GIF from the GUI
-
-1. Open `./run_gui.sh`.
-2. Select the **GIF** tab.
-3. Select a mixture and additive fraction.
-4. Set pressure and gap.
-5. Choose **Electric field** or **Target gain**.
-6. Set `t max` and the number of frames.
-7. Enable or disable ion movement.
-8. Set the constant visual ion speed.
-9. Enable space charge if required.
-10. Click **Generate GIF**.
-
-### Generate a GIF at a fixed field from the command line
-
-```bash
-python3 run_campaign.py --gif \
-  --mixture ArCF4 \
-  --fraction 1 \
-  --pressure-bar 1 \
-  --gap-mm 0.05 \
-  --field-kv-cm 35 \
-  --npe 1 \
-  --height-factor 1.5 \
-  --tmax-ns 2 \
-  --frames 100 \
-  --space-charge \
-  --move-ions \
-  --ion-speed-cm-ns 1e-4
-```
-
-### Generate a GIF from a target gain
-
-```bash
-python3 run_campaign.py --gif \
-  --mixture ArCF4 \
-  --fraction 1 \
-  --pressure-bar 1 \
-  --gap-mm 0.05 \
-  --gain 20 \
-  --npe 1 \
-  --tmax-ns 2 \
-  --frames 100
-```
-
-Target-gain GIF generation requires an existing alpha fit for the selected
-mixture, fraction, gap and space-charge state.
-
-### Ion motion in GIFs
-
-The GIF controller moves positive ions along `+z` using
-
-```math
-z(t) = z_0 + v_{\mathrm{ion}}(t-t_0),
-```
-
-with the user-selected constant `v_ion`.
-
-Important: this velocity is used only to make the ion motion visible in the GIF.
-It is not written as a measured gas-transport result and does not affect the
-production gain campaign.
-
-Disable it with:
-
-```bash
---no-move-ions
-```
-
----
-
-## Supported mixtures
-
-The runner currently defines these binary mixture families:
-
-| Campaign name | First gas | Additive/second gas |
-|---|---:|---:|
-| `ArCF4` | Ar | CF4 |
-| `ArN2` | Ar | N2 |
-| `HeCF4` | He | CF4 |
-| `ArCO2` | Ar | CO2 |
-| `ArCH4` | Ar | CH4 |
-| `ArIso` | Ar | iC4H10 |
-| `ArC2H2F4` | Ar | C2H2F4 |
-
-The number in the YAML is always the percentage of the **second gas**.
-
-Examples:
+### `photo_absorption`
 
 ```yaml
-mixtures:
-  ArCF4: [1]
+photo_absorption: true
 ```
 
-means:
-
-```text
-Ar 99% + CF4 1%
-```
-
-while
+Uses Garfield++ optical transport and allows gas absorption and gas photoionisation.
 
 ```yaml
-mixtures:
-  ArC2H2F4: [100]
+photo_absorption: false
 ```
 
-means pure `C2H2F4`.
+Uses isotropic geometric propagation between the planes without gas optical interactions.
 
-A fraction of `0` gives pure first gas, and a fraction of `100` gives pure second
-gas.
+### `propagate_only_above_phit`
+
+```yaml
+propagate_only_above_phit: true
+```
+
+Uses the selected QE material/model to determine `PhiT` automatically. All generated photons remain in `hSpectra`, but only photons above the effective threshold are transported.
+
+### `photon_transport_cut_ev`
+
+A technical lower cut applied in addition to `PhiT`:
+
+```yaml
+photon_transport_cut_ev: 0.0
+```
+
+With the automatic `PhiT` option enabled, the effective cut is the larger of these two values.
+
+### QE model
+
+```yaml
+qe_material: stainless_steel
+qe_csv: data/qe/qe_materials.csv
+qe_model: measured_extended
+```
+
+Available model modes are:
+
+```text
+measured_extended
+measured_table
+constant_threshold
+```
+
+`measured_extended` uses the measured table together with the project's extension outside the tabulated interval. `measured_table` restricts the response to the tabulated model. `constant_threshold` uses the configured fallback threshold and QE.
+
+### Electron extraction efficiency
+
+```yaml
+electron_extraction_efficiency: 1.0
+```
+
+This multiplies the probability that a QE-accepted electron is extracted into the gas and available to start a secondary avalanche.
+
+### Feedback generations
+
+```yaml
+max_feedback_generations: 5
+```
+
+Generation `0` is the primary avalanche. A seed produced by generation `g` creates generation `g + 1`.
+
+### Gas-photoionisation feedback
+
+```yaml
+propagate_photoionisation_electrons: true
+```
+
+When enabled, electrons created by optical ionisation in the gas are inserted into the feedback queue.
+
+### Safety limits
+
+```yaml
+max_avalanches_per_primary: 10000
+max_mc_photons_per_primary: 100000000
+```
+
+These limits prevent runaway feedback or accidental memory/time explosions. They are safety constraints, not physical parameters.
 
 ---
 
-## Adding a new mixture
+## Campaign modes
 
-The current design supports binary mixtures. For another binary mixture, the C++
-usually does not need to change because gas names and percentages are passed to
-`MediumMagboltz::SetComposition`.
-
-### 1. Add the mixture to `run_campaign.py`
-
-Edit `MIXTURE_COMPONENTS`:
-
-```python
-MIXTURE_COMPONENTS = {
-    "ArCF4": ("ar", "cf4"),
-    "ArC2H2F4": ("ar", "c2h2f4"),
-    "XeCO2": ("xe", "co2"),  # example
-}
-```
-
-The key is the user-facing campaign name. The tuple contains the Magboltz gas
-identifiers.
-
-Confirm that the gas identifier is accepted by your Garfield++/Magboltz version.
-
-### 2. Add it to the GIF selector in `gui.py`
-
-Add the same campaign name to the mixture combo box:
-
-```python
-self.mixture.addItems([
-    "ArCF4",
-    "ArC2H2F4",
-    "XeCO2",
-])
-```
-
-Campaign YAML editing does not require a hard-coded GUI entry, but the GIF combo
-box does.
-
-### 3. Test one small point
+### Fixed-field mode
 
 ```yaml
 scan_mode: field
-
-mixtures:
-  XeCO2: [10]
-
-pressures_bar: [1]
-
-fields_kv_cm:
-  0.05: [20]
-
-npe: 20
-workers: 1
 ```
 
-### 4. Check the generated ROOT
+The runner simulates exactly the requested fields. It does not modify them to obtain a target gain.
 
-Verify:
+A `field_set` accepts either explicit fields:
 
-- `gasData/gas1` and `gasData/gas2`;
-- percentages;
-- measured gain;
-- `hLevels` entries;
-- optional transport fields;
-- absence of warnings from `MediumMagboltz::SetComposition`.
+```yaml
+fields_kv_cm: [30, 35, 40]
+```
 
----
+or a reference field and scale factors:
 
-## Extending the project to new cases
+```yaml
+reference_field_kv_cm: 39.8
+field_scales: [1.1, 1.0, 0.75]
+```
 
-### More fractions, pressures, fields or gains
+Fixed-field mode is the recommended mode for studying photon feedback at selected experimental operating points.
 
-No code changes are needed. Extend the YAML lists.
+### Target-gain mode
 
-### More gaps
+```yaml
+scan_mode: gain
+```
 
-Add another gap key under `gaps_mm` or `fields_kv_cm`.
+The inherited campaign controller can use existing ROOT points and the alpha-model hierarchy to propose fields for requested gains. The measured gain is read from `dataPerPrimaryElectron/ne`, so it is the total gain including feedback.
 
-### Pure gases
-
-Use `0` for pure first gas or `100` for pure second gas.
-
-### Ternary mixtures
-
-Ternary mixtures require code changes because the current configuration and
-command-line interface carry two gases only. At minimum, extend:
-
-- the C++ `Config` structure;
-- argument parsing;
-- the `SetComposition` call;
-- ROOT naming;
-- `gasData` branches;
-- YAML mixture mapping;
-- GUI controls;
-- ROOT validation and alpha-family keys.
-
-Do not encode a ternary mixture as a fake binary campaign name without updating
-these layers.
-
-### Non-uniform electric fields
-
-The current project uses `ComponentUser` for a uniform field. A mesh, analytic
-geometry or imported field map would require replacing the field component and
-reviewing:
-
-- sensor area;
-- launch position;
-- gain-distance definition;
-- field interpolation;
-- alpha-model assumptions;
-- GIF field map.
-
-### Magnetic fields
-
-The current campaign model assumes no magnetic field. Adding one requires C++
-configuration and likely additional YAML/GUI parameters. Transverse drift then
-becomes physically relevant.
-
-### Different ion models
-
-Campaign space charge currently uses static charged rings. GIF ion motion uses a
-constant visual velocity. A physical ion-drift implementation would require ion
-mobility data and `AvalancheMC` or another appropriate Garfield++ transport
-model.
-
-### Adding a new ROOT quantity
-
-When adding an output:
-
-1. create/fill it in `uniformE.cxx`;
-2. write it before closing the ROOT file;
-3. detach ROOT-owned histograms when they also have C++ owners;
-4. update `run_campaign.py` if the ROOT validator requires a specific schema;
-5. regenerate old ROOTs when the schema changes;
-6. document its units in the branch name.
+Use target-gain mode only after validating the feedback configuration and collecting stable fixed-field statistics.
 
 ---
 
 ## Output files
 
-### ROOT files
+Production ROOT files are stored under:
 
 ```text
 outputs/roots/<mixture>/gap_<gap>mm/
@@ -1006,152 +693,43 @@ outputs/roots/<mixture>/gap_<gap>mm/
 Example:
 
 ```text
-outputs/roots/ArCF4/gap_0.050mm/
+outputs/roots/ArCF4/gap_0.150mm/
 ```
 
-ROOT file names follow the physical configuration:
+Typical file name:
 
 ```text
-ar_99.0_cf4_1.0_35.0kVcm_1.000bar_0.0500mm_100npe.root
+ar_90.0_cf4_10.0_39.8kVcm_1.000bar_0.1500mm_100npe.root
 ```
 
 The name contains:
 
-- gas percentages;
-- field in `kV/cm`;
+- gas fractions;
+- electric field in `kV/cm`;
 - pressure in `bar`;
 - gap in `mm`;
 - actual number of primary electrons.
 
-### Alpha fits
-
-Machine-readable fit state:
-
-```text
-outputs/alpha/<mixture>/gap_<gap>mm.json
-```
-
-Human-auditable diagnostics and gain-1-to-10^7 extrapolations:
-
-```text
-fits/<mixture>/gap_<gap>mm/<composition>.pdf
-```
-
-Space-charge fits use distinct JSON and PDF families. No diagnostic PNG files
-are generated.
-
-### GIFs
-
-```text
-outputs/gifs/
-```
-
-### Legacy ROOT files
-
-When the runner detects an incompatible old schema, it may move the file to:
+Incompatible ROOT schemas may be moved to:
 
 ```text
 outputs/legacy_roots/
 ```
 
-Old ROOT files are not rewritten automatically. Regenerate them with the current
-code when the schema or histogram definitions change.
+Target-gain fit state and diagnostics are stored under:
+
+```text
+outputs/alpha/
+fits/
+```
 
 ---
 
 ## ROOT contents
 
-Current production ROOT files contain:
-
-```text
-hElectronEnergyDistribution
-hLevels
-hExcXYZ                   # optional
-hExcZT                    # optional
-dataPerPrimaryElectron
-dataPerElectron
-gasData
-```
-
-There is no `levelMap` tree.
-
-### `hElectronEnergyDistribution`
-
-Electron-energy distribution sampled from microscopic null-collision steps.
-The internal energy reservoir is capped to avoid unbounded memory growth.
-
-### `hLevels`
-
-`hLevels` deliberately preserves the historical project definition:
-
-```text
-all real non-elastic Magboltz collision terms with a valid level index
-```
-
-It includes collision types 1–5:
-
-- ionisation;
-- attachment;
-- generic inelastic channels;
-- excitation channels;
-- superelastic channels.
-
-Despite the historical plot title `Excitation Distribution`, it is not a pure
-`type == excitation` histogram. This convention is retained for compatibility
-with the downstream photon/scintillation pipeline.
-
-### `hExcXYZ`
-
-Optional `128 × 128 × 128` integer histogram of the joint spatial positions for
-generic inelastic and excitation channels (`type 3 + type 4`).
-
-Limits:
-
-```text
-x, y in [-2 × gap, +2 × gap]
-z in [0, gap]
-```
-
-The three coordinates are filled together, so the complete spatial correlation
-`P(x, y, z)` is retained at the histogram resolution.
-
-### `hExcZT`
-
-Optional `128 × 256` integer histogram of `z` versus `t` for generic inelastic
-and excitation channels. Its `z` bins match `hExcXYZ`; the time axis can extend
-when necessary.
-
-The compact histogram approach avoids storing one tree entry per excitation.
-Combining `hExcXYZ` with the conditional time distribution `P(t | z)` preserves
-the joint spatial distribution and the longitudinal-time correlation, but not
-residual `x-t` or `y-t` correlations.
-
-### `dataPerPrimaryElectron`
-
-One entry per primary electron:
-
-| Branch | Meaning |
-|---|---|
-| `ne` | final electrons from that primary avalanche |
-| `ni` | ions produced by that primary avalanche |
-| `npe` | number of represented primaries; currently `1` per entry |
-
-The campaign runner computes the gain and its statistical uncertainty from this
-tree.
-
-### `dataPerElectron`
-
-One entry per final electron endpoint:
-
-| Branch | Meaning |
-|---|---|
-| `status` | Garfield++ electron endpoint status |
-
-At high gain, this tree can become one of the largest objects in the ROOT file.
-
 ### `gasData`
 
-One entry per ROOT file:
+One entry per ROOT file containing only the gas and run identity:
 
 | Branch | Unit | Meaning |
 |---|---:|---|
@@ -1159,235 +737,340 @@ One entry per ROOT file:
 | `composition1_pct` | `%` | first-gas fraction |
 | `gas2` | — | second Magboltz gas identifier |
 | `composition2_pct` | `%` | second-gas fraction |
+| `gas3` | — | optional third gas identifier |
+| `composition3_pct` | `%` | optional third-gas fraction |
 | `pressure_bar` | `bar` | gas pressure |
 | `temperature_K` | `K` | gas temperature |
-| `electricField_V_cm` | `V/cm` | uniform electric field magnitude |
-| `gap_mm` | `mm` | physical multiplication gap |
-| `height_mm` | `mm` | total computational height |
-| `spaceCharge` | boolean | charged-ring space charge enabled |
-| `npe` | — | actual number of simulated primaries |
-| `townsendAlpha_cm_inv` | `cm^-1` | Magboltz Townsend coefficient |
-| `attachmentEta_cm_inv` | `cm^-1` | Magboltz attachment coefficient |
-| `alphaEffective_cm_inv` | `cm^-1` | `alpha - eta` from Magboltz |
-| `driftVelocityZ_cm_ns` | `cm/ns` | electron drift velocity along `z` |
-| `longitudinalDiffusion_sqrt_cm` | `sqrt(cm)` | longitudinal diffusion coefficient |
-| `transverseDiffusion_sqrt_cm` | `sqrt(cm)` | transverse diffusion coefficient |
+| `electricField_V_cm` | `V/cm` | uniform field magnitude |
+| `gap_mm` | `mm` | multiplication gap |
+| `npe` | — | actual simulated primary electrons |
+| `randomSeed` | — | run random seed |
 
-When Magboltz transport is disabled, the transport branches exist but contain
-`NaN`.
+Physics results are intentionally not duplicated in `gasData`.
 
-The drift velocity may be negative. In this geometry a negative `z` velocity is
-expected when electrons drift from `z = gap` towards the anode at `z = 0`.
+### `photonTransportData`
 
-To display a negative value correctly in ROOT/JSROOT, select an axis range that
-includes negative numbers, for example:
+One summary entry containing only:
+
+| Branch | Meaning |
+|---|---|
+| `nPhotoabsorptions` | total weighted gas photoabsorptions |
+| `nPhotoionisations` | weighted gas-photoionisation subset |
+
+Both branches are stored as floating-point values so weighted `mc_samples > 1` runs remain valid.
+
+### `dataPerPrimaryElectron`
+
+One entry per initial primary electron:
+
+| Branch | Meaning |
+|---|---|
+| `ne` | total final electrons including every feedback generation |
+| `ni` | total ions including every feedback generation |
+| `neTotalWithFeedback` | explicit alias of total `ne` |
+| `niTotalWithFeedback` | explicit alias of total `ni` |
+| `nePrimaryAvalanche` | generation-0 electrons only |
+| `niPrimaryAvalanche` | generation-0 ions only |
+| `npe` | represented primaries, currently `1` per entry |
+| `nAvalanches` | total avalanches in this primary's chain |
+| `nPhotoelectrons` | cathode-photoelectron seeds that entered the chain |
+| `nPhotoionisationSeeds` | gas-photoionisation seeds that entered the chain |
+| `maxGeneration` | highest simulated feedback generation |
+
+### `dataPerAvalanche`
+
+One entry for every primary or feedback avalanche:
+
+| Branch | Meaning |
+|---|---|
+| `primaryId` | parent initial-electron index |
+| `avalancheId` | avalanche index within the primary chain |
+| `generation` | feedback generation |
+| `seedType` | primary, cathode photoelectron or gas photoionisation |
+| `seedXcm`, `seedYcm`, `seedZcm` | seed position |
+| `seedTimeNs` | seed time |
+| `seedEnergyEv` | seed energy |
+| `ne`, `ni` | avalanche electron and ion counts |
+| `nPhotons` | weighted photons generated by this avalanche |
+| `nCathodeImpacts` | weighted cathode impacts |
+| `nPhotoelectrons` | weighted QE-accepted cathode electrons |
+| `nPhotoionisationElectrons` | weighted electrons created by gas photoionisation |
+
+This is the principal tree for reconstructing the secondary-avalanche chain.
+
+### `dataPerElectron`
+
+One entry per final electron endpoint:
+
+| Branch | Meaning |
+|---|---|
+| `status` | Garfield++ endpoint status |
+| `primaryId` | parent initial electron |
+| `avalancheId` | parent avalanche |
+| `generation` | feedback generation |
+
+This tree can become large at high gain.
+
+### Primary-avalanche histograms
+
+```text
+hElectronEnergyDistribution
+hLevels
+hExcXYZ                 # only when record_excitation_positions is true
+hExcZT                  # only when record_excitation_positions is true
+```
+
+`hLevels` retains the historical project convention: valid non-elastic Magboltz levels from collision types 1–5, rather than only pure excitation-type collisions.
+
+### Time structure
+
+```text
+hElectronsVsTime
+hElectronsVsTimeFull
+hAvalancheElectronsVsTime
+hAvalancheElectronsVsTimePrompt
+hAvalancheElectronsVsTimeGeneration
+hFeedbackGeneration
+```
+
+- `hElectronsVsTime` contains electron endpoints in the fixed prompt window, normally `0–10 ns`.
+- `hElectronsVsTimeFull` retains the complete delayed chain.
+- `hAvalancheElectronsVsTime` places each avalanche at its seed time with weight equal to its electron yield.
+- `hAvalancheElectronsVsTimeGeneration` separates avalanche strength by time and generation.
+
+### Photon production and propagation
+
+```text
+hSpectra
+hPhotonXYZ
+hPhotonWavelengthTime
+hCosTheta
+hPhi
+hQE
+```
+
+### Cathode response
+
+```text
+hImpactsXY
+hPhotoElectronXY
+hPhotoElectronTimeEnergy
+```
+
+### Gas optical interactions
+
+```text
+hPhotoAbsorptionXYZ
+hPhotoAbsorptionZT
+hPhotoIonisationXYZ
+hPhotoIonisationZT
+```
+
+### ROOT drawing style
+
+All one-dimensional ROOT histograms are stored with default option:
+
+```text
+HIST
+```
+
+They therefore open as stepped histograms in ROOT/JSROOT. Bin errors and `Sumw2` information remain available and may be drawn explicitly with:
 
 ```cpp
-gasData->Draw("driftVelocityZ_cm_ns>>h(100,-0.02,0.0)");
+hist->Draw("E1");
 ```
+
+Two- and three-dimensional histograms retain their normal ROOT drawing behaviour.
 
 ---
 
-## Magboltz transport quantities
+## Understanding `mc_samples`
 
-When **Magboltz transport** is enabled, the simulation generates a gas transport
-table at the requested field before reading:
+`mc_samples` controls photon Monte Carlo oversampling.
 
-- electron drift velocity;
-- longitudinal diffusion;
-- transverse diffusion;
-- Townsend coefficient `alpha`;
-- attachment coefficient `eta`;
-- effective coefficient `alpha - eta`.
+For
 
-These are macroscopic Magboltz transport quantities. They are distinct from the
-simulation-derived value
-
-```math
-\ln(G)/d.
+```yaml
+mc_samples: 10
 ```
 
-The transport calculation can dominate the runtime of small avalanche tests.
-Recommended workflow:
+approximately ten Monte Carlo photons are sampled per expected physical photon, and each sample carries weight
 
 ```text
-Field/gain exploration       → Magboltz transport OFF
-Final selected field points  → Magboltz transport ON
-Dedicated transport scan     → Magboltz transport ON
+1 / mc_samples = 0.1
 ```
+
+Therefore:
+
+- ROOT histogram `Entries` counts raw Monte Carlo samples;
+- the histogram integral represents the weighted physical-equivalent count;
+- `4000` impact entries at `mc_samples: 10` correspond to approximately `400` physical-equivalent impacts.
+
+For the discrete feedback chain, a QE-accepted Monte Carlo photoelectron is retained as an actual avalanche seed with probability `1 / mc_samples`. The same unbiased downsampling is applied to gas-photoionisation electron seeds.
+
+This prevents photon oversampling from artificially multiplying the number of secondary avalanches.
+
+### Recommended use
+
+For smooth optical distributions and geometric efficiencies:
+
+```yaml
+mc_samples: 10
+```
+
+or larger may be useful.
+
+For event-by-event secondary-avalanche studies, where one impact should correspond directly to one physical trial:
+
+```yaml
+mc_samples: 1
+```
+
+is easier to interpret:
+
+```text
+one sampled photon = one physical photon
+one impact entry   = one impact
+one accepted seed  = one secondary avalanche seed
+```
+
+Do not remove the YAML key; set it to `1`.
 
 ---
 
 ## Performance recommendations
 
+### Start with `mc_samples: 1` for feedback-chain debugging
+
+This gives the cleanest event-by-event interpretation and avoids spending time oversampling distributions before the secondary-avalanche logic is validated.
+
+### Increase `npe` for rare photoemission
+
+With low-QE materials, `npe: 5` frequently produces zero photoelectrons even when thousands of weighted Monte Carlo impact entries are visible. Use at least tens or hundreds of primaries when studying secondary-avalanche statistics.
+
 ### Worker count
 
-Garfield++/Magboltz processes can consume substantial memory. `workers: auto`
-may start too many simultaneous jobs and cause swapping.
-
-Recommended starting point:
+Garfield++ and Magboltz jobs can use substantial memory. Begin with:
 
 ```yaml
 workers: 2
 ```
 
-Increase it only after monitoring RAM usage.
+Reduce to `1` if the system swaps or becomes unresponsive.
 
-### Split large scans
+### Keep Magboltz transport disabled unless needed
 
-Prefer campaigns grouped by mixture and gap:
-
-```text
-ArCF4 / 0.05 mm
-ArCF4 / 0.50 mm
-ArCF4 / 1.00 mm
-ArN2  / 0.05 mm
-...
+```yaml
+measure_gas_transport: false
 ```
 
-Start with `0.05 mm`, which is generally the least expensive gap and is useful
-for validating the predictor.
+The microscopic avalanche already uses Magboltz collision data. This switch controls the additional macroscopic transport-table measurement, which can dominate the runtime of small tests.
 
-### Disable unnecessary outputs
+### Excitation-position output
 
-For fast gain refinement:
-
-```text
-Space charge          OFF
-Magboltz transport    OFF
-Excitation positions  OFF if not needed
+```yaml
+record_excitation_positions: true
 ```
 
-Enable expensive measurements only for final production points when possible.
+is required for `hExcXYZ` and `hExcZT`. Disable it only when those spatial diagnostics are not required.
 
-### Keep GIFs out of campaigns
+### Feedback safety
 
-GIF creation is a diagnostic operation. Do not generate GIFs during large
-production campaigns.
+A rapidly increasing chain can generate enormous numbers of photons and avalanches. Keep the generation, avalanche and photon safety limits enabled during development.
 
 ---
 
 ## Troubleshooting
 
-### PySide6 / Qt6DBus symbol error
+### `AvalancheMicroscopic has no member TransportPhotonExternal`
 
-Example:
+The project is compiling against a Garfield++ header that does not contain the public wrapper.
 
-```text
-ImportError: libQt6DBus.so.6: undefined symbol ... Qt_6_PRIVATE_API
+Verify:
+
+```bash
+grep -n "TransportPhotonExternal" \
+  ~/garfield/Include/Garfield/AvalancheMicroscopic.hh \
+  ~/garfield/install/include/Garfield/AvalancheMicroscopic.hh
 ```
 
+Then rebuild this project from a clean directory:
+
+```bash
+rm -rf build
+cmake -S . -B build \
+  -DCMAKE_PREFIX_PATH="$HOME/garfield/install"
+cmake --build build -j2
+```
+
+### CMake finds the wrong Garfield++ installation
+
+Inspect:
+
+```bash
+cmake --build build --verbose -j2
+```
+
+and confirm that include and library paths point to the intended installation prefix.
+
+### Zero photoelectrons despite many impact entries
+
+Check:
+
+1. `mc_samples`: `Entries` are not physical counts when `mc_samples > 1`;
+2. the integral of `hImpactsXY`, not only the displayed `Entries`;
+3. the selected material QE in `hQE`;
+4. the number of primaries;
+5. `electron_extraction_efficiency`;
+6. whether `E_gamma > PhiT` leaves sufficient transported photons.
+
+For low-QE stainless steel and very small `npe`, zero photoelectrons can be the statistically expected result.
+
+### Too many lateral photon losses
+
 Use:
+
+```yaml
+infinite_electrodes: true
+optical_half_width_gaps: 100.0
+```
+
+and regenerate the ROOT. Old files retain the previous finite geometry.
+
+### Prompt-time histogram appears empty
+
+Confirm that the ROOT was generated with the current prompt/full separation. `hElectronsVsTime` should cover only `prompt_time_max_ns`, while delayed events belong to `hElectronsVsTimeFull`.
+
+### Old ROOT schema is reused
+
+Delete or move the specific old ROOT and rerun the point. Existing ROOT files are not rewritten merely because the C++ schema has changed.
+
+### PySide6 / Qt library conflict
+
+Launch with:
 
 ```bash
 ./run_gui.sh
 ```
 
-The launcher prepends the Qt libraries bundled with PySide6 while preserving the
-ROOT/Garfield++ library paths.
-
-### Exit code 127
-
-Usually indicates a missing shared library at runtime.
-
-Check:
-
-```bash
-ldd build/uniformE | grep "not found"
-```
-
-Then verify ROOT and Garfield++ environment variables.
-
-### CMake cannot find Garfield++
-
-```bash
-export CMAKE_PREFIX_PATH="/path/to/garfield-install:${CMAKE_PREFIX_PATH:-}"
-cmake -S . -B build
-```
-
-### Old objects such as `levelMap` still appear
-
-You are opening an old ROOT file or running an old executable.
-
-The current production schema does not contain `levelMap`. Delete/regenerate the
-specific ROOT or move old outputs away, then run through `./run_gui.sh`, which
-rebuilds the executable.
-
-### `.pending_*.root` files
-
-These are temporary files used while a job is being completed and validated.
-After an interrupted campaign, they can be removed safely when no campaign is
-running:
-
-```bash
-find outputs/roots -type f -name '.pending_*.root' -delete
-```
-
-### The system starts swapping
-
-Stop the campaign and reduce:
-
-```yaml
-workers: 1
-```
-
-or
-
-```yaml
-workers: 2
-```
-
-Split the campaign by mixture and gap.
-
-### GIF target gain cannot be resolved
-
-A target-gain GIF needs an existing compatible alpha fit. Either run a gain
-campaign first or specify the electric field directly with `--field-kv-cm`.
-
-### Magboltz transport is slow
-
-This is expected. Disable it during field/gain exploration and enable it only
-for selected final points.
+rather than directly running `python3 gui.py`. The launcher selects the Qt libraries bundled with PySide6 while preserving ROOT/Garfield++ library paths.
 
 ---
 
-## Recommended first tests
+## Scope and limitations
 
-### Fixed-field test
+The current project assumes:
 
-```yaml
-scan_mode: field
+- a uniform electric field;
+- parallel anode and cathode planes;
+- no imported Micromegas/GEM field map;
+- no microscopic ion-drift simulation;
+- optional charged-ring space charge rather than a complete plasma treatment;
+- photon emission determined by the supplied kinetic model and parameter tables;
+- optical transport determined by the Garfield++/Magboltz optical data available for the gas;
+- cathode response determined by the selected QE table/model.
 
-mixtures:
-  ArCF4: [1]
-
-pressures_bar: [1]
-
-fields_kv_cm:
-  0.05: [35]
-
-npe: 20
-workers: 1
-```
-
-### Small target-gain test
-
-```yaml
-scan_mode: gain
-
-mixtures:
-  ArCF4: [0, 1]
-
-pressures_bar: [1]
-
-gaps_mm:
-  0.05: [2, 10, 20]
-
-gain_tolerance: 0.05
-workers: 1
-```
-
-Validate these before launching a large multibar campaign.
+The effectively infinite transverse geometry is appropriate for studying intrinsic photon feedback in a uniform gap. A realistic detector mesh, hole structure or finite photocathode requires a non-uniform field and explicit detector geometry.
 
 ---
 
@@ -1396,13 +1079,20 @@ Validate these before launching a large multibar campaign.
 This project depends on:
 
 - Garfield++: https://garfieldpp.docs.cern.ch/
-- Garfield++ installation: https://garfieldpp.docs.cern.ch/install/
 - ROOT: https://root.cern/
-- ROOT installation: https://root.cern/install/
-- Qt for Python / PySide6: https://doc.qt.io/qtforpython-6/
 - CMake: https://cmake.org/
+- Qt for Python / PySide6: https://doc.qt.io/qtforpython-6/
 
-When publishing results produced with Garfield++, Magboltz or ROOT, follow the
-citation recommendations of the corresponding projects and document the exact
-software versions, gas composition, pressure, temperature, gap, field and runtime
-options used in the simulation.
+When publishing results, document at least:
+
+- Garfield++ and ROOT versions;
+- gas composition and pressure;
+- temperature;
+- electric field and gap;
+- QE material/model and extraction efficiency;
+- `mc_samples`;
+- photon-absorption mode;
+- `PhiT` propagation setting;
+- feedback-generation and safety limits;
+- number of primary electrons;
+- random seed.
