@@ -1,6 +1,8 @@
 name,value,description
 Nnorm,0.0052213212772051,secondary_optimal from scintillationModel/data/Tables/param_secondary
 P_CF3_vis_dir,0.08994679202677665,secondary_optimal from scintillationModel/data/Tables/param_secondary
+tau_CF3_ns,15.0,CF3* radiative lifetime used by the emission-time model
+tau_CF4_UV_ns,15.0,Effective CF4+* UV/VUV radiative lifetime; quenching uses tau_uv_K_CF4_Q_CF4
 P_Ar_dbleStar,0.37049176779681403,secondary_optimal from scintillationModel/data/Tables/param_secondary
 K_Ar_dbleStar_Q_Ar,244.673181465848,secondary_optimal from scintillationModel/data/Tables/param_secondary
 K_Ar_dbleStar_Q_CF4,9999.93000450232,secondary_optimal from scintillationModel/data/Tables/param_secondary

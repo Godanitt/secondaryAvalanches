@@ -1,35 +1,42 @@
-name,tex_name,value,fixed,description
-loschmidt_m3,$N_0$ [m$^{-3}$],2.6868e+25,True,Reference density used to convert SI collision coefficients to pressure-normalised rates.
-W_Ar_dbleStar_to_1s,$\mathcal{W}^{0}_{\mathrm{Ar}^{**}\to 1s}$,1.0,True,Effective feed-down weight from Ar** into the Ar(4s) precursor family.
-tau_Ar_dbleStar_ns,$\tau_{\mathrm{Ar}^{**}}$ [ns],30.0,True,Effective lifetime of the upper argon cascade.
-k_Ar_dbleStar_Q_Ar_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{Ar})}$ [m$^3$ s$^{-1}$],1.63e-17,True,Upper-state argon self-quenching coefficient.
-k_Ar_4s_Q_Ar_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{Ar})}$ [m$^3$ s$^{-1}$],1.63e-17,True,Effective Ar(4s)+Ar cascade coefficient.
-k_Ar_4s_Q_2Ar_m6_s,"$k_{\mathrm{Ar}^*(4s)+2\mathrm{Ar}}$ [m$^6$ s$^{-1}$]",1e-44,True,Ternary excimer-formation coefficient.
-f_1Sigma,$f_{1\Sigma}$,0.1,True,Singlet excimer formation fraction.
-f_3Sigma,$f_{3\Sigma}$,0.9,True,Triplet excimer formation fraction.
-tau_S_ns,$\tau_{\mathrm{Ar}_2^*(^1\Sigma)}$ [ns],11.3,True,Singlet excimer lifetime.
-tau_T_ns,$\tau_{\mathrm{Ar}_2^*(^3\Sigma)}$ [ns],3140.0,True,Triplet excimer lifetime.
-triplet_weight,$w_T$,1.0,True,Nominal prediction includes singlet and triplet; quenching suppresses each branch dynamically.
-scale_Ar2nd,$S_{2nd}$,1.0,True,Optional global sensitivity scale.
-anchor_Ar2nd_to_pure_argon,$A_{\mathrm{pure}}$,0.0,True,Disabled; the absolute yield follows hLevels populations and kinetic probabilities.
-Y_Ar2nd_pure_ph_MeV,$Y_{\mathrm{Ar2nd}}^{\mathrm{pure}}$ [ph/MeV],14700.0,True,Legacy anchor retained only for explicit sensitivity studies.
-reference_pressure_bar,$p_{\mathrm{ref}}$ [bar],1.1,True,Reference pressure used only by the optional legacy anchor.
-reference_additive_fraction,$f_{\mathrm{ref}}$,1e-05,True,Reference fraction used only by the optional legacy anchor.
-pure_argon_fraction_threshold,$f_{\mathrm{pure}}^{\mathrm{thr}}$,0.0,True,No numerical pure-argon switch is used.
-lambda_Ar2nd_nm,$\lambda_{2nd}$ [nm],128.0,True,Central wavelength of the Ar second continuum.
-fwhm_Ar2nd_nm,$\mathrm{FWHM}_{2nd}$ [nm],10.0,True,Gaussian FWHM of the Ar second continuum.
-Br_CF4_D_to_X,$\mathcal{B}r_{D\to X}$,0.1,True,Effective CF4 ionic VUV branching ratio.
-lambda_CF4_D_to_X_nm,$\lambda_{D\to X}$ [nm],155.0,True,Central wavelength of the CF4 ionic VUV branch.
-fwhm_CF4_D_to_X_nm,$\mathrm{FWHM}_{D\to X}$ [nm],10.0,True,Gaussian FWHM of the CF4 ionic VUV branch.
-k_Ar_dbleStar_Q_CF4_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{CF}_4)}$ [m$^3$ s$^{-1}$],1.8e-16,True,Upper-state argon quenching by CF4.
-k_Ar_4s_Q_CF4_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{CF}_4)}$ [m$^3$ s$^{-1}$],3e-17,True,Ar(4s) quenching by CF4.
-k_Ar2star_Q_CF4_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{CF}_4)}$ [m$^3$ s$^{-1}$],3e-17,True,Ar2* quenching by CF4.
-k_Ar_dbleStar_Q_N2_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{N}_2)}$ [m$^3$ s$^{-1}$],1.58e-16,True,Upper-state argon quenching by N2.
-k_Ar_4s_Q_N2_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{N}_2)}$ [m$^3$ s$^{-1}$],3.6e-17,True,Ar(4s) quenching by N2.
-k_Ar2star_Q_N2_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{N}_2)}$ [m$^3$ s$^{-1}$],2.24e-18,True,Ar2* quenching by N2 from Chen 1979.
-k_Ar_dbleStar_Q_CH4_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{CH}_4)}$ [m$^3$ s$^{-1}$],6.53e-16,True,CH4 upper-state coefficient.
-k_Ar_4s_Q_CH4_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{CH}_4)}$ [m$^3$ s$^{-1}$],3.3e-16,True,Measured CH4 quenching of Ar(4s 3P2).
-k_Ar2star_Q_CH4_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{CH}_4)}$ [m$^3$ s$^{-1}$],3.3e-16,True,Explicit proxy equal to Ar(4s)+CH4.
-k_Ar_dbleStar_Q_IC4H10_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{iC}_4\mathrm{H}_{10})}$ [m$^3$ s$^{-1}$],7.10e-16,True,Common effective isobutane coefficient adopted for every Ar excitation.
-k_Ar_4s_Q_IC4H10_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{iC}_4\mathrm{H}_{10})}$ [m$^3$ s$^{-1}$],7.10e-16,True,Measured Ar(1s5) quenching reference used as the common effective value.
-k_Ar2star_Q_IC4H10_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{iC}_4\mathrm{H}_{10})}$ [m$^3$ s$^{-1}$],7.10e-16,True,Explicit Ar2* proxy equal to the Ar(1s5) coefficient.
+scope,additive,name,tex_name,value,unit,fixed,reference,description,enabled,status
+common,,loschmidt_m3,$N_0$,2.6868e+25,m^-3,True,Loschmidt,Reference density used to convert SI collision coefficients to pressure-normalised rates.,True,active
+common,,W_Ar_dbleStar_to_1s,$\mathcal{W}^{0}_{\mathrm{Ar}^{**}\to 1s}$,1.0,dimensionless,True,TFM,Effective feed-down weight from Ar** into the Ar(4s) precursor family.,True,active
+common,,tau_Ar_dbleStar_ns,$\tau_{\mathrm{Ar}^{**}}$,30.0,ns,True,TFM,Effective lifetime of the upper argon cascade.,True,active
+common,,k_Ar_dbleStar_Q_Ar_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{Ar})}$,1.63e-17,m^3/s,True,TFM mean Ar(4p),Upper-state argon self-quenching coefficient.,True,active
+common,,k_Ar_4s_Q_Ar_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{Ar})}$,1.63e-17,m^3/s,True,TFM effective,Effective Ar(4s)+Ar cascade coefficient; currently identified with the tabulated Ar**+Ar mean.,True,active
+common,,k_Ar_4s_Q_2Ar_m6_s,$k_{\mathrm{Ar}^*(4s)+2\mathrm{Ar}}$,1e-44,m^6/s,True,TFM,Ternary excimer-formation coefficient.,True,active
+common,,tau_Ar_1s5_ns,$\tau_{\mathrm{Ar}^*(1s5)}$,7.0,ns,True,Updated TFM model,Radiative lifetime of the 11.624 eV resonant Ar state before resonant re-emissions.,True,active
+common,,r,$r$,150.0,dimensionless,True,Updated TFM model,Inverse escape factor / mean number of resonant absorption-re-emission cycles: g=1/r=1/150. With tau_Ar4s=7 ns; tau_eff=r*tau=1050 ns and Gamma_direct=1/tau_eff.,True,active
+common,,energy_Ar_1s5_eV,$E_{\mathrm{Ar}^*(1s5)}$,11.624,eV,True,Garfield/Degrad Ar level,Energy of the resonant direct-emission state; lambda is derived as hc/E.,True,active
+common,,sigma_Ar_1s5_direct_nm,$\sigma_{1s5}$,0.25,nm,True,Plotting model,Narrow Gaussian sigma used to represent the direct Ar(1s5) line near 106.66 nm.,True,active
+common,,f_1Sigma,$f_{1\Sigma}$,0.1,dimensionless,True,TFM,Singlet excimer formation fraction.,True,active
+common,,f_3Sigma,$f_{3\Sigma}$,0.9,dimensionless,True,TFM,Triplet excimer formation fraction.,True,active
+common,,tau_S_ns,$\tau_{\mathrm{Ar}_2^*(^1\Sigma)}$,4.5,ns,True,Updated TFM model,Singlet excimer lifetime used in the updated second-continuum model.,True,active
+common,,tau_T_ns,$\tau_{\mathrm{Ar}_2^*(^3\Sigma)}$,3140.0,ns,True,Amsler 2008,Triplet excimer lifetime.,True,active
+common,,triplet_weight,$w_T$,1.0,dimensionless,True,TFM,Nominal prediction includes singlet and triplet; additive quenching suppresses each branch dynamically.,True,active
+common,,scale_Ar2nd,$S_{2nd}$,1.0,dimensionless,True,TFM,Optional global sensitivity scale.,True,active
+common,,anchor_Ar2nd_to_pure_argon,$A_{\mathrm{pure}}$,0.0,boolean,True,legacy,Disabled; the absolute yield follows the Degrad populations and kinetic model.,True,active
+common,,Y_Ar2nd_pure_ph_MeV,$Y_{\mathrm{Ar2nd}}^{\mathrm{pure}}$,14700.0,ph/MeV,True,legacy,Legacy anchor value retained only for explicit sensitivity studies.,True,active
+common,,reference_pressure_bar,$p_{\mathrm{ref}}$,1.1,bar,True,legacy,Reference pressure used only if the optional legacy anchor is enabled.,True,active
+common,,reference_additive_fraction,$f_{\mathrm{ref}}$,1e-05,dimensionless,True,legacy,Reference fraction used only if the optional legacy anchor is enabled.,True,active
+common,,pure_argon_fraction_threshold,$f_{\mathrm{pure}}^{\mathrm{thr}}$,0.0,dimensionless,True,deprecated,No numerical pure-argon switch is used.,True,active
+common,,lambda_Ar2nd_nm,$\lambda_{2nd}$,128.0,nm,True,TFM,Central wavelength of the Ar second continuum.,True,active
+common,,fwhm_Ar2nd_nm,$\mathrm{FWHM}_{2nd}$,10.0,nm,True,TFM,Gaussian FWHM used to draw the Ar second-continuum band.,True,active
+common,,Br_CF4_D_to_X,$\mathcal{B}r_{D\to X}$,0.1,dimensionless,True,TFM,Effective CF4 ionic VUV branching ratio; retained for spectrum generation.,True,active
+common,,lambda_CF4_D_to_X_nm,$\lambda_{D\to X}$,155.0,nm,True,TFM,Central wavelength of the CF4 ionic VUV branch.,True,active
+common,,fwhm_CF4_D_to_X_nm,$\mathrm{FWHM}_{D\to X}$,10.0,nm,True,TFM,Gaussian FWHM of the CF4 ionic VUV branch.,True,active
+additive,CF4,k_Ar_dbleStar_Q_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{CF}_4)}$,1.8e-16,m^3/s,True,TFM table,Quenching of upper argon states by CF4.,True,active
+additive,CF4,k_Ar_4s_Q_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{CF}_4)}$,3e-17,m^3/s,True,TFM table,Quenching of the Ar(4s) precursor family by CF4.,True,active
+additive,CF4,k_Ar2star_Q_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{CF}_4)}$,3e-17,m^3/s,True,TFM table,Quenching of singlet and triplet Ar2* by CF4.,True,active
+additive,N2,k_Ar_dbleStar_Q_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{N}_2)}$,1.58e-16,m^3/s,True,TFM table,Quenching of upper argon states by N2.,True,active
+additive,N2,k_Ar_4s_Q_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{N}_2)}$,3.6e-17,m^3/s,True,TFM table,Quenching of the Ar(4s) precursor family by N2.,True,active
+additive,N2,k_Ar2star_Q_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{N}_2)}$,2.24e-18,m^3/s,True,Chen 1979,Quenching of singlet and triplet Ar2* by N2.,True,active
+additive,CO2,k_Ar_dbleStar_Q_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{CO2})}$,,m^3/s,True,TO_FILL,Upper-state quenching by additive; fill from literature before enabling.,False,planned
+additive,CO2,k_Ar_4s_Q_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{CO2})}$,,m^3/s,True,TO_FILL,Ar(4s) quenching by additive; fill from literature before enabling.,False,planned
+additive,CO2,k_Ar2star_Q_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{CO2})}$,,m^3/s,True,TO_FILL,Ar2* quenching by additive; fill from literature before enabling.,False,planned
+additive,CH4,k_Ar_dbleStar_Q_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{CH4})}$,6.53e-16,m^3/s,True,Sadeghi 2001 mean Ar(4p),CH4 value used directly for Ar** quenching.,True,estimated
+additive,CH4,k_Ar_4s_Q_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{CH4})}$,3.3e-16,m^3/s,True,Velazco et al. 1978,Measured CH4 quenching of the Ar(4s 3P2) metastable state.,True,estimated
+additive,CH4,k_Ar2star_Q_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{CH4})}$,3.3e-16,m^3/s,True,CH4 proxy: equal to Ar(4s),No adopted direct Ar2*+CH4 value; explicit model proxy equal to Ar(4s)+CH4.,True,estimated
+additive,IC4H10,k_Ar_dbleStar_Q_m3_s,$k_{\mathrm{Ar}^{**}Q(\mathrm{IC4H10})}$,7.1e-16,m^3/s,True,Piper-Velazco-Setser 1973 effective extension,Common iC4H10 coefficient adopted for every Ar excitation; direct reference is Ar(1s5).,True,estimated
+additive,IC4H10,k_Ar_4s_Q_m3_s,$k_{\mathrm{Ar}(4s)Q(\mathrm{IC4H10})}$,7.1e-16,m^3/s,True,Piper-Velazco-Setser 1973,Measured Ar(1s5)=Ar(4s 3P2) quenching reference used as the common effective value.,True,estimated
+additive,IC4H10,k_Ar2star_Q_m3_s,$k_{\mathrm{Ar}_2^*Q(\mathrm{IC4H10})}$,7.1e-16,m^3/s,True,Ar(1s5) effective proxy,No direct adopted Ar2* measurement; the common 7.10e-16 value is an explicit model assumption.,True,estimated

@@ -16,7 +16,8 @@ double slowest_emission_lifetime_ns(
     const std::vector<KineticComponent>& components) {
   double lifetime_ns = 0.0;
   for (const auto& component : components) {
-    lifetime_ns = std::max(lifetime_ns, std::max(0.0, component.mean_lifetime_ns));
+    lifetime_ns =
+        std::max(lifetime_ns, std::max(0.0, component.mean_total_delay_ns));
   }
   return lifetime_ns;
 }
@@ -77,8 +78,10 @@ const PhotonSourceSite* sample_source_site(
     }
   }
   if (matching.empty()) {
-    if (sites.empty()) return nullptr;
-    return &sites[static_cast<std::size_t>(random.Integer(sites.size()))];
+    // A photon must inherit x-y-z-t from a collision that actually belongs to
+    // its source population. Falling back to an unrelated collision corrupts
+    // the wavelength-time correlation.
+    return nullptr;
   }
   return matching[static_cast<std::size_t>(random.Integer(matching.size()))];
 }
@@ -99,14 +102,26 @@ double sample_wavelength_nm(const KineticComponent& component,
   return std::clamp(peak.center_nm, minimum_nm, maximum_nm);
 }
 
+EmissionDelaySample sample_emission_delay(
+    const KineticComponent& component, TRandom3& random) {
+  EmissionDelaySample sample;
+  for (const auto& stage : component.kinetic_stages) {
+    if (!std::isfinite(stage.tau_total_ns) || stage.tau_total_ns <= 0.0) {
+      continue;
+    }
+    const double waiting_time_ns = random.Exp(stage.tau_total_ns);
+    if (stage.kind == KineticStageKind::Emission) {
+      sample.emission_delay_ns += waiting_time_ns;
+    } else {
+      sample.excitation_delay_ns += waiting_time_ns;
+    }
+  }
+  return sample;
+}
+
 double sample_emission_delay_ns(const KineticComponent& component,
                                 TRandom3& random) {
-  if (component.name.find("CF3_direct") != std::string::npos) return 0.0;
-  if (!std::isfinite(component.mean_lifetime_ns) ||
-      component.mean_lifetime_ns <= 0.0) {
-    return 0.0;
-  }
-  return random.Exp(component.mean_lifetime_ns);
+  return sample_emission_delay(component, random).total_delay_ns();
 }
 
 long long number_of_mc_photons(const double expected_photons,

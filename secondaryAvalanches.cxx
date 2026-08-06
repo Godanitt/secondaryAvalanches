@@ -87,6 +87,23 @@ void use_hist_draw_option(TH1& hist) {
   hist.SetOption("HIST");
 }
 
+void zoom_time_axis_to_content(TH2& hist, const int margin_bins = 2) {
+  int last_occupied_y = 0;
+  for (int ybin = 1; ybin <= hist.GetNbinsY(); ++ybin) {
+    bool occupied = false;
+    for (int xbin = 0; xbin <= hist.GetNbinsX() + 1; ++xbin) {
+      if (hist.GetBinContent(xbin, ybin) != 0.0) {
+        occupied = true;
+        break;
+      }
+    }
+    if (occupied) last_occupied_y = ybin;
+  }
+  if (last_occupied_y <= 0) return;
+  hist.GetYaxis()->SetRange(
+      1, std::min(hist.GetNbinsY(), last_occupied_y + std::max(0, margin_bins)));
+}
+
 double parse_double(const char* text, const char* name) {
   try {
     std::size_t used = 0;
@@ -1042,7 +1059,7 @@ struct OutputHistograms {
                    kExcitationSpatialBins, 0.0, c.gap_cm()),
         photon_wavelength_time(
             "hPhotonWavelengthTime",
-            "Photon wavelength and emission time;wavelength [nm];time [ns]",
+            "Photon wavelength and absolute emission time;wavelength [nm];time [ns]",
             spectra.GetNbinsX(), c.wavelength_min_nm, c.wavelength_max_nm,
             c.time_bins, 0.0, time_max_ns),
         cos_theta("hCosTheta",
@@ -1118,6 +1135,15 @@ struct OutputHistograms {
     electrons_vs_time_full.SetCanExtend(TH1::kXaxis);
     avalanche_electrons_vs_time.SetCanExtend(TH1::kXaxis);
     avalanche_electrons_vs_time_generation.SetCanExtend(TH1::kXaxis);
+    if (c.time_max_ns <= 0.0) {
+      // Rare statistical tails and late feedback must never be sent to the
+      // overflow bin. The initial range is already mixture-dependent and ROOT
+      // only extends it if an actually generated event requires more space.
+      photon_wavelength_time.SetCanExtend(TH1::kYaxis);
+      photoelectron_time_energy.SetCanExtend(TH1::kXaxis);
+      photoabsorption_zt.SetCanExtend(TH1::kYaxis);
+      photoionisation_zt.SetCanExtend(TH1::kYaxis);
+    }
 
     // The weighted avalanche histograms use one Fill call per avalanche and
     // weight it by ne. ROOT's "Entries" would therefore mean avalanches, not
@@ -1386,6 +1412,29 @@ int main(int argc, char* argv[]) {
             ? std::max(config.photon_transport_cut_ev, qe_threshold_ev)
             : config.photon_transport_cut_ev;
 
+    // Determine the long-time ROOT range from the kinetic model of this exact
+    // gas mixture. Unit populations activate every component that is actually
+    // available in the current Magboltz level map without changing any yield.
+    std::vector<photonemission::LevelPopulation> timing_populations;
+    timing_populations.reserve(level_info.size());
+    for (std::size_t i = 0; i < level_info.size(); ++i) {
+      photonemission::LevelPopulation population;
+      population.level = static_cast<int>(i);
+      population.n_events = 1.0;
+      population.known_level = true;
+      population.level_info = level_info[i];
+      timing_populations.push_back(std::move(population));
+    }
+    const auto timing_components = photonemission::create_photon_emission(
+        model_gas, timing_populations, config.parameters_dir, 1);
+    const double slowest_mean_kinetic_delay_ns =
+        photonemission::slowest_emission_lifetime_ns(timing_components);
+    const bool automatic_time_range = config.time_max_ns <= 0.0;
+    const double time_max_ns =
+        automatic_time_range
+            ? std::max(100.0, 10.0 * slowest_mean_kinetic_delay_ns)
+            : config.time_max_ns;
+
     if (!config.quiet) {
       std::cout << "  PhiT / QE threshold       = " << qe_threshold_ev
                 << " eV\n"
@@ -1398,7 +1447,12 @@ int main(int argc, char* argv[]) {
                 << config.transport_half_width_cm() / config.gap_cm()
                 << " gaps)\n"
                 << "  prompt time window        = "
-                << config.prompt_time_max_ns << " ns\n";
+                << config.prompt_time_max_ns << " ns\n"
+                << "  slowest mean kinetic delay = "
+                << slowest_mean_kinetic_delay_ns << " ns\n"
+                << "  full time window          = " << time_max_ns << " ns ("
+                << (automatic_time_range ? "kinetic auto-range" : "configured")
+                << ")\n";
     }
 
     std::unique_ptr<PhotonPropagation> photon_propagation;
@@ -1406,10 +1460,6 @@ int main(int argc, char* argv[]) {
       photon_propagation = std::make_unique<PhotonPropagation>(
           photon_geometry, gas, effective_photon_transport_cut_ev);
     }
-
-    const double time_max_ns = config.time_max_ns > 0.0
-                                   ? config.time_max_ns
-                                   : std::max(100.0, 20.0 * 3140.0);
 
     // ========================================================================
     //                              ROOT output
@@ -1752,9 +1802,18 @@ int main(int argc, char* argv[]) {
             const double wavelength_nm = photonemission::sample_wavelength_nm(
                 component, random, config.wavelength_min_nm,
                 config.wavelength_max_nm);
+            // Garfield supplies the absolute source-collision time.  The
+            // kinetic model then samples every successful sequential stage:
+            // tau_exc contains cascade/transfer/formation delays and tau_em
+            // contains the final radiating-state delay.  Each stage uses its
+            // own tau_tot = 1 / sum(Gamma), including competing quenching.
+            const auto emission_delay =
+                photonemission::sample_emission_delay(component, random);
+            const double excitation_time_ns = std::max(0.0, site->time_ns);
+            const double tau_exc_ns = emission_delay.excitation_delay_ns;
+            const double tau_em_ns = emission_delay.emission_delay_ns;
             const double emission_time_ns =
-                std::max(0.0, site->time_ns) +
-                photonemission::sample_emission_delay_ns(component, random);
+                excitation_time_ns + tau_exc_ns + tau_em_ns;
             const double photon_energy_ev =
                 photonemission::photon_energy_ev(wavelength_nm);
 
@@ -2036,6 +2095,11 @@ int main(int argc, char* argv[]) {
                                config.root_file);
     }
     output.cd();
+    // Store hPhotonWavelengthTime with a compact default Y view ending just
+    // above the latest generated emission. The full histogram remains intact
+    // and the axis range can be reset interactively in ROOT.
+    zoom_time_axis_to_content(photon_hists.photon_wavelength_time);
+
     h_electron_energy.Write();
     h_levels.Write();
     if (h_exc_xyz != nullptr) h_exc_xyz->Write();

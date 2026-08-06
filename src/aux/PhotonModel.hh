@@ -70,6 +70,17 @@ struct SpectralPeak {
   double weight = 1.0;
 };
 
+enum class KineticStageKind { Excitation, Emission };
+
+struct KineticStage {
+  std::string name;
+  KineticStageKind kind = KineticStageKind::Excitation;
+  // Effective lifetime of this state after every competing channel has been
+  // included: tau_tot = 1 / sum_j Gamma_j.  The branching probability is
+  // already accounted for in KineticComponent::expected_photons.
+  double tau_total_ns = 0.0;
+};
+
 struct KineticComponent {
   std::string name;
   std::string region;
@@ -78,7 +89,26 @@ struct KineticComponent {
   double source_population = 0.0;
   double expected_photons = 0.0;
   double probability = 0.0;
-  double mean_lifetime_ns = 0.0;
+
+  // A photon is emitted at
+  //   t_gamma = t_Garfield_collision + tau_exc(sampled) + tau_em(sampled).
+  // Intermediate cascade/transfer/formation stages contribute to tau_exc;
+  // the final radiating state contributes to tau_em.  Every waiting time is
+  // sampled independently from Exp(tau_total) because sequential stages do
+  // not combine into one exponential distribution.
+  std::vector<KineticStage> kinetic_stages;
+  double mean_excitation_delay_ns = 0.0;
+  double mean_emission_delay_ns = 0.0;
+  double mean_total_delay_ns = 0.0;
+};
+
+struct EmissionDelaySample {
+  double excitation_delay_ns = 0.0;
+  double emission_delay_ns = 0.0;
+
+  double total_delay_ns() const {
+    return excitation_delay_ns + emission_delay_ns;
+  }
 };
 
 inline std::string lower(std::string value) {
@@ -283,6 +313,47 @@ inline double population_for_selector(const SourceSelector& selector,
   return total;
 }
 
+inline bool csv_value_is_false(const std::string& value) {
+  const std::string v = normalise_text_for_match(trim(value));
+  return v == "0" || v == "false" || v == "no" || v == "off" ||
+         v == "disabled" || v == "inactive";
+}
+
+inline std::string csv_additive_suffix(std::string additive) {
+  additive = lower(trim(additive));
+  additive.erase(std::remove_if(additive.begin(), additive.end(),
+                                [](unsigned char c) {
+                                  return c == '-' || c == '_' ||
+                                         std::isspace(c);
+                                }),
+                 additive.end());
+  if (additive == "cf4") return "CF4";
+  if (additive == "n2" || additive == "nitrogen") return "N2";
+  if (additive == "co2" || additive == "carbondioxide") return "CO2";
+  if (additive == "ch4" || additive == "methane") return "CH4";
+  if (additive == "ic4h10" || additive == "c4h10" ||
+      additive == "isobutane" || additive == "isobutano" ||
+      additive == "iso") {
+    return "IC4H10";
+  }
+  std::transform(additive.begin(), additive.end(), additive.begin(),
+                 [](unsigned char c) {
+                   return static_cast<char>(std::toupper(c));
+                 });
+  return additive;
+}
+
+inline std::string scoped_additive_parameter_name(
+    const std::string& name, const std::string& additive_suffix) {
+  static constexpr const char* unit_suffix = "_m3_s";
+  if (name.size() >= 5 &&
+      name.compare(name.size() - 5, 5, unit_suffix) == 0) {
+    return name.substr(0, name.size() - 5) + "_" + additive_suffix +
+           unit_suffix;
+  }
+  return name + "_" + additive_suffix;
+}
+
 inline std::map<std::string, double> read_parameter_csv_values(const std::string& path) {
   std::ifstream in(path);
   if (!in) throw std::runtime_error("No puedo abrir parameter CSV: " + path);
@@ -298,16 +369,20 @@ inline std::map<std::string, double> read_parameter_csv_values(const std::string
     return it == index.end() ? std::numeric_limits<std::size_t>::max() : it->second;
   };
 
-  const std::size_t i_name = optional_col("name") != std::numeric_limits<std::size_t>::max()
+  const std::size_t absent = std::numeric_limits<std::size_t>::max();
+  const std::size_t i_name = optional_col("name") != absent
                                ? optional_col("name")
                                : optional_col("parameter");
-  const std::size_t i_value = optional_col("value") != std::numeric_limits<std::size_t>::max()
+  const std::size_t i_value = optional_col("value") != absent
                                 ? optional_col("value")
                                 : optional_col("secondary_optimal");
-  if (i_name == std::numeric_limits<std::size_t>::max()) {
+  const std::size_t i_scope = optional_col("scope");
+  const std::size_t i_additive = optional_col("additive");
+  const std::size_t i_enabled = optional_col("enabled");
+  if (i_name == absent) {
     throw std::runtime_error("Columna ausente en parameter CSV: name/parameter");
   }
-  if (i_value == std::numeric_limits<std::size_t>::max()) {
+  if (i_value == absent) {
     throw std::runtime_error("Columna ausente en parameter CSV: value/secondary_optimal");
   }
 
@@ -317,13 +392,38 @@ inline std::map<std::string, double> read_parameter_csv_values(const std::string
     if (trim(line).empty()) continue;
     const auto fields = split_csv_line(line);
     if (fields.size() <= std::max(i_name, i_value)) continue;
-    const std::string name = trim(fields[i_name]);
+    if (i_enabled != absent && i_enabled < fields.size() &&
+        csv_value_is_false(fields[i_enabled])) {
+      continue;
+    }
+
+    std::string name = trim(fields[i_name]);
     const std::string value_text = trim(fields[i_value]);
     if (name.empty() || value_text.empty()) continue;
+
+    // Compatibility with the first resonant-line patch.
+    if (name == "r_Ar_1s5_direct") name = "r";
+
+    std::string storage_name = name;
+    if (i_scope != absent && i_scope < fields.size() &&
+        normalise_text_for_match(fields[i_scope]) == "additive") {
+      if (i_additive == absent || i_additive >= fields.size()) {
+        throw std::runtime_error(
+            "Fila aditiva sin columna additive en parameter CSV: " + path);
+      }
+      const std::string suffix = csv_additive_suffix(fields[i_additive]);
+      if (suffix.empty()) {
+        throw std::runtime_error(
+            "Fila aditiva sin gas en parameter CSV: " + path);
+      }
+      storage_name = scoped_additive_parameter_name(name, suffix);
+    }
+
     try {
-      out[name] = std::stod(value_text);
+      out[storage_name] = std::stod(value_text);
     } catch (...) {
-      // Ignore NaN/empty/non-numeric fields; only the central value column matters here.
+      // Empty/planned rows are intentionally ignored. Active numeric rows are
+      // the only values consumed by the C++ kinetic model.
     }
   }
   return out;
@@ -412,6 +512,95 @@ inline void apply_secondary_normalization(std::vector<KineticComponent>& compone
   }
 }
 
+inline KineticStage excitation_stage(std::string name,
+                                      const double tau_total_ns) {
+  return {std::move(name), KineticStageKind::Excitation, tau_total_ns};
+}
+
+inline KineticStage emission_stage(std::string name,
+                                    const double tau_total_ns) {
+  return {std::move(name), KineticStageKind::Emission, tau_total_ns};
+}
+
+inline void push_component(std::vector<KineticComponent>& out,
+                           std::string name,
+                           std::string region,
+                           SourceSelector source,
+                           std::vector<SpectralPeak> peaks,
+                           const double source_population,
+                           const double expected_photons_one_sample,
+                           const double probability,
+                           const std::vector<KineticStage>& kinetic_stages,
+                           const int /*mc_samples*/) {
+  if (!std::isfinite(expected_photons_one_sample) ||
+      expected_photons_one_sample <= 0.0) {
+    return;
+  }
+  KineticComponent c;
+  c.name = std::move(name);
+  c.region = std::move(region);
+  c.source = std::move(source);
+  c.peaks = std::move(peaks);
+  c.source_population = source_population;
+  c.expected_photons = expected_photons_one_sample;
+  c.probability = probability;
+
+  for (const auto& stage : kinetic_stages) {
+    if (!std::isfinite(stage.tau_total_ns) || stage.tau_total_ns <= 0.0) {
+      continue;
+    }
+    c.kinetic_stages.push_back(stage);
+    c.mean_total_delay_ns += stage.tau_total_ns;
+    if (stage.kind == KineticStageKind::Emission) {
+      c.mean_emission_delay_ns += stage.tau_total_ns;
+    } else {
+      c.mean_excitation_delay_ns += stage.tau_total_ns;
+    }
+  }
+
+  // Every generated component must end in a real radiative state.  This is a
+  // model-construction error, not a condition that should be silently fixed.
+  const bool has_emission_stage = std::any_of(
+      c.kinetic_stages.begin(), c.kinetic_stages.end(),
+      [](const KineticStage& stage) {
+        return stage.kind == KineticStageKind::Emission;
+      });
+  if (!has_emission_stage) {
+    throw std::runtime_error("Photon component without final emission stage: " +
+                             c.name);
+  }
+  out.push_back(std::move(c));
+}
+
+// Convenience overload for existing multi-stage channels.  The final waiting
+// time belongs to the radiating state; every previous waiting time is an
+// excitation/transfer/cascade stage.  Explicitly named stages are preferred
+// for physically important channels such as the Ar second continuum.
+inline void push_component(std::vector<KineticComponent>& out,
+                           std::string name,
+                           std::string region,
+                           SourceSelector source,
+                           std::vector<SpectralPeak> peaks,
+                           const double source_population,
+                           const double expected_photons_one_sample,
+                           const double probability,
+                           const std::vector<double>& lifetime_stages_ns,
+                           const int mc_samples) {
+  std::vector<KineticStage> stages;
+  stages.reserve(lifetime_stages_ns.size());
+  for (std::size_t i = 0; i < lifetime_stages_ns.size(); ++i) {
+    const bool final_stage = i + 1 == lifetime_stages_ns.size();
+    stages.push_back(final_stage
+                         ? emission_stage("final emitting state",
+                                          lifetime_stages_ns[i])
+                         : excitation_stage("cascade / transfer",
+                                            lifetime_stages_ns[i]));
+  }
+  push_component(out, std::move(name), std::move(region), std::move(source),
+                 std::move(peaks), source_population,
+                 expected_photons_one_sample, probability, stages, mc_samples);
+}
+
 inline void push_component(std::vector<KineticComponent>& out,
                            std::string name,
                            std::string region,
@@ -421,20 +610,19 @@ inline void push_component(std::vector<KineticComponent>& out,
                            const double expected_photons_one_sample,
                            const double probability,
                            const double lifetime_ns,
-                           const int /*mc_samples*/) {
-  if (!std::isfinite(expected_photons_one_sample) || expected_photons_one_sample <= 0.0) return;
-  KineticComponent c;
-  c.name = std::move(name);
-  c.region = std::move(region);
-  c.source = std::move(source);
-  c.peaks = std::move(peaks);
-  c.source_population = source_population;
-  c.expected_photons = expected_photons_one_sample;
-  c.probability = probability;
-  c.mean_lifetime_ns = std::max(0.0, lifetime_ns);
-  out.push_back(std::move(c));
+                           const int mc_samples) {
+  push_component(out, std::move(name), std::move(region), std::move(source),
+                 std::move(peaks), source_population,
+                 expected_photons_one_sample, probability,
+                 std::vector<KineticStage>{
+                     emission_stage("final emitting state", lifetime_ns)},
+                 mc_samples);
 }
 
+inline double lifetime_from_total_rate_ns(const double total_rate_ns_inv) {
+  if (!std::isfinite(total_rate_ns_inv) || total_rate_ns_inv <= 0.0) return 0.0;
+  return 1.0 / total_rate_ns_inv;
+}
 
 inline double positive_rate(const double value) {
   return std::isfinite(value) ? std::max(0.0, value) : 0.0;
@@ -595,107 +783,252 @@ inline void push_ar2nd_components(std::vector<KineticComponent>& out,
                                   const int mc_samples) {
   const double n = std::max(gas.pressure_bar, 0.0);
   if (n <= 0.0 || fraction_of(gas, "ar") <= 0.0) return;
+
   const Ar2ndKineticRates rates = ar2nd_rates_for_mixture(p2nd, gas);
   const double f_ar = rates.argon_fraction;
   if (f_ar <= 0.0) return;
 
-  // Disjoint source populations for the second-continuum cascade.  The
-  // intervals must never overlap, otherwise the 11.7--12.0 eV 4s population
-  // would also be counted as Ar**.
-  //   Ar(1s4,1s5): 11.5--11.7 eV
-  //   Ar(1s2,1s3): 11.7--12.0 eV
-  //   Ar**:         12.0--100 eV
-  const SourceSelector sel_ar_precursor{"Ar", {"EXC"}, 11.50, 11.70};
+  // The supplied model/CSV stores the 11.548 eV metastable population as
+  // Ar_1s4 and the 11.624 eV resonant population as Ar_1s5.  Because the
+  // Paschen labels are interchanged in some conventions, component names use
+  // the unambiguous energy/state descriptions instead of relying on 1s4/1s5.
+  const double energy_1s4_ev = pget(p2nd, "energy_Ar_1s4_eV", 11.548);
+  const double energy_1s5_ev = pget(p2nd, "energy_Ar_1s5_eV", 11.624);
+  const double lower_state_split_ev =
+      (energy_1s4_ev < energy_1s5_ev)
+          ? 0.5 * (energy_1s4_ev + energy_1s5_ev)
+          : 11.586;
+
+  // Disjoint source populations. A Garfield collision can enter exactly one
+  // kinetic source family; this prevents double counting in the VUV model.
+  const SourceSelector sel_ar_1s4{"Ar", {"EXC"}, 11.50,
+                                  lower_state_split_ev};
+  const SourceSelector sel_ar_1s5{"Ar", {"EXC"}, lower_state_split_ev,
+                                  11.70};
   const SourceSelector sel_ar_high_4s{"Ar", {"EXC"}, 11.70, 12.00};
   const SourceSelector sel_ar_upper{"Ar", {"EXC"}, 12.00, 100.0};
 
-  const double p_precursor_population = population_for_selector(sel_ar_precursor, populations);
-  const double p_high_4s_population = population_for_selector(sel_ar_high_4s, populations);
-  const double p_upper_population = population_for_selector(sel_ar_upper, populations);
-  if (p_precursor_population <= 0.0 && p_high_4s_population <= 0.0 &&
-      p_upper_population <= 0.0) {
+  const double population_1s4 =
+      population_for_selector(sel_ar_1s4, populations);
+  const double population_1s5 =
+      population_for_selector(sel_ar_1s5, populations);
+  const double population_high_4s =
+      population_for_selector(sel_ar_high_4s, populations);
+  const double population_upper =
+      population_for_selector(sel_ar_upper, populations);
+  if (population_1s4 <= 0.0 && population_1s5 <= 0.0 &&
+      population_high_4s <= 0.0 && population_upper <= 0.0) {
     return;
   }
 
-  const double tau_upper = std::max(
-      pget(p2nd, "tau_Ar_dbleStar_ns", 30.0), 1.0e-30);
-  const double gamma_upper = 1.0 / tau_upper;
-  const double upper_productive = gamma_upper + n * f_ar * rates.upper_ar;
-  const double p_upper = safe_ratio(
-      upper_productive,
-      upper_productive + n * rates.upper_additives);
+  // Ar**: productive cascade/self-relaxation competes with every additive.
+  const double tau_upper_rad_ns =
+      std::max(pget(p2nd, "tau_Ar_dbleStar_ns", 30.0), 1.0e-30);
+  const double gamma_upper_rad = 1.0 / tau_upper_rad_ns;
+  const double gamma_upper_productive =
+      gamma_upper_rad + n * f_ar * rates.upper_ar;
+  const double gamma_upper_total =
+      gamma_upper_productive + n * rates.upper_additives;
+  const double p_upper_productive =
+      safe_ratio(gamma_upper_productive, gamma_upper_total);
+  const double tau_upper_tot_ns =
+      lifetime_from_total_rate_ns(gamma_upper_total);
 
-  const double high_4s_productive = n * f_ar * rates.four_s_ar;
-  const double p_high_4s = safe_ratio(
-      high_4s_productive,
-      high_4s_productive + n * rates.four_s_additives);
+  // Ar(1s2,1s3): relaxation into the two lower 4s states competes with
+  // additive quenching.
+  const double gamma_high_productive = n * f_ar * rates.four_s_ar;
+  const double gamma_high_total =
+      gamma_high_productive + n * rates.four_s_additives;
+  const double p_high_productive =
+      safe_ratio(gamma_high_productive, gamma_high_total);
+  const double tau_high_tot_ns =
+      lifetime_from_total_rate_ns(gamma_high_total);
 
-  const double formation_productive =
+  // Lower 4s states are now resolved. Both can form Ar2*, but only the
+  // resonant 11.624 eV state has the competing trapped direct line.
+  const double gamma_excimer_formation =
       n * n * f_ar * f_ar * rates.excimer_formation;
-  const double p_form = safe_ratio(
-      formation_productive,
-      formation_productive + n * rates.four_s_additives);
-  if (p_form <= 0.0) return;
+  const double gamma_4s_quenching = n * rates.four_s_additives;
 
-  const double tau_s = std::max(pget(p2nd, "tau_S_ns", 11.3), 1.0e-30);
-  const double tau_t = std::max(pget(p2nd, "tau_T_ns", 3140.0), 1.0e-30);
-  const double inv_tau_s = 1.0 / tau_s;
-  const double inv_tau_t = 1.0 / tau_t;
-  const double p_rad_s = safe_ratio(
-      inv_tau_s,
-      inv_tau_s + n * rates.excimer_additives);
-  const double p_rad_t = safe_ratio(
-      inv_tau_t,
-      inv_tau_t + n * rates.excimer_additives);
+  const double gamma_1s4_total =
+      gamma_excimer_formation + gamma_4s_quenching;
+  const double p_1s4_to_excimer =
+      safe_ratio(gamma_excimer_formation, gamma_1s4_total);
+  const double tau_1s4_tot_ns =
+      lifetime_from_total_rate_ns(gamma_1s4_total);
+
+  // r is the mean number of resonant absorption/re-emission cycles. It acts on
+  // the radiative lifetime, tau_direct_eff = r * tau_atomic. Therefore changing
+  // only r in Ar2nd_continium.csv updates both the direct branching ratio and
+  // the waiting-time distribution used by hPhotonWavelengthTime.
+  const double tau_atomic_1s5_ns = std::max(
+      pget(p2nd, "tau_Ar_1s5_ns",
+           pget(p2nd, "tau_Ar_1s4_ns",
+                pget(p2nd, "tau_Ar4s_ns", 7.0))),
+      1.0e-30);
+  const double resonant_reemissions =
+      std::max(positive_rate(pget(p2nd, "r", 150.0)), 1.0e-30);
+  const double tau_direct_eff_ns =
+      resonant_reemissions * tau_atomic_1s5_ns;
+  const double gamma_direct_1s5 = 1.0 / tau_direct_eff_ns;
+  const double gamma_1s5_total =
+      gamma_excimer_formation + gamma_4s_quenching + gamma_direct_1s5;
+  const double p_1s5_to_excimer =
+      safe_ratio(gamma_excimer_formation, gamma_1s5_total);
+  const double p_1s5_direct =
+      safe_ratio(gamma_direct_1s5, gamma_1s5_total);
+  const double tau_1s5_tot_ns =
+      lifetime_from_total_rate_ns(gamma_1s5_total);
+
+  // Final excimer states: radiative emission competes with additive quenching.
+  const double tau_s_rad_ns =
+      std::max(pget(p2nd, "tau_S_ns", 4.5), 1.0e-30);
+  const double tau_t_rad_ns =
+      std::max(pget(p2nd, "tau_T_ns", 3140.0), 1.0e-30);
+  const double gamma_s_rad = 1.0 / tau_s_rad_ns;
+  const double gamma_t_rad = 1.0 / tau_t_rad_ns;
+  const double gamma_s_total =
+      gamma_s_rad + n * rates.excimer_additives;
+  const double gamma_t_total =
+      gamma_t_rad + n * rates.excimer_additives;
+  const double p_s_radiative = safe_ratio(gamma_s_rad, gamma_s_total);
+  const double p_t_radiative = safe_ratio(gamma_t_rad, gamma_t_total);
+  const double tau_s_tot_ns = lifetime_from_total_rate_ns(gamma_s_total);
+  const double tau_t_tot_ns = lifetime_from_total_rate_ns(gamma_t_total);
 
   double f_s = 0.1;
   double f_t = 0.9;
   ar2nd_formation_fractions(p2nd, f_s, f_t);
 
-  const double scale = pget(p2nd, "scale_Ar2nd", 1.0);
-  const double w_upper_to_1s = std::max(
-      0.0, pget(p2nd, "W_Ar_dbleStar_to_1s", 1.0));
-  const double lambda = pget(p2nd, "lambda_Ar2nd_nm", 128.0);
-  const double fwhm = pget(p2nd, "fwhm_Ar2nd_nm", 10.0);
-  const auto peaks = peaks_ar_second_continuum(lambda, fwhm);
+  // The supplied Python model divides every successful high/upper cascade
+  // equally between the independently represented 1s4 and 1s5 populations.
+  // Optional CSV keys are accepted for later sensitivity studies without a
+  // source-code change; absent keys reproduce the current 0.5/0.5 model.
+  double f_cascade_to_1s4 = clamp_value(
+      pget(p2nd, "f_Ar_cascade_to_1s4", 0.5), 0.0, 1.0);
+  double f_cascade_to_1s5 = clamp_value(
+      pget(p2nd, "f_Ar_cascade_to_1s5", 0.5), 0.0, 1.0);
+  const double cascade_norm = f_cascade_to_1s4 + f_cascade_to_1s5;
+  if (cascade_norm <= 0.0) {
+    f_cascade_to_1s4 = 0.5;
+    f_cascade_to_1s5 = 0.5;
+  } else {
+    f_cascade_to_1s4 /= cascade_norm;
+    f_cascade_to_1s5 /= cascade_norm;
+  }
 
-  const double path_precursor = p_form;
-  const double path_high_4s = p_high_4s * p_form;
-  const double path_upper = w_upper_to_1s * p_upper * p_form;
+  const double scale = std::max(0.0, pget(p2nd, "scale_Ar2nd", 1.0));
+  const double triplet_weight =
+      clamp_value(pget(p2nd, "triplet_weight", 1.0), 0.0, 1.0);
+  const double w_upper_to_1s =
+      std::max(0.0, pget(p2nd, "W_Ar_dbleStar_to_1s", 1.0));
+  const double singlet_factor = scale * f_s * p_s_radiative;
+  const double triplet_factor =
+      scale * triplet_weight * f_t * p_t_radiative;
 
-  const double singlet_factor = scale * f_s * p_rad_s;
-  // Both excimer branches are always generated.  The slow component is not
-  // disabled by hand: it disappears naturally in mixtures through p_rad_t,
-  // whose long triplet lifetime makes additive quenching dominant.
-  const double triplet_weight = clamp_value(pget(p2nd, "triplet_weight", 1.0), 0.0, 1.0);
-  const double triplet_factor = scale * triplet_weight * f_t * p_rad_t;
+  const double lambda_2nd_nm = pget(p2nd, "lambda_Ar2nd_nm", 128.0);
+  const double fwhm_2nd_nm = pget(p2nd, "fwhm_Ar2nd_nm", 10.0);
+  const auto second_continuum_peaks =
+      peaks_ar_second_continuum(lambda_2nd_nm, fwhm_2nd_nm);
+
+  static constexpr double hc_ev_nm = 1239.8419843320026;
+  const double lambda_direct_nm =
+      hc_ev_nm / std::max(energy_1s5_ev, 1.0e-30);
+  const double sigma_direct_nm = std::max(
+      pget(p2nd, "sigma_Ar_1s5_direct_nm",
+           pget(p2nd, "sigma_Ar_1s4_direct_nm", 0.25)),
+      1.0e-12);
+  const auto direct_line_peaks = peaks_single(lambda_direct_nm,
+                                               sigma_direct_nm);
+
+  struct FeedPath {
+    std::string tag;
+    SourceSelector source;
+    double source_population = 0.0;
+    double feed_probability = 0.0;
+    std::vector<KineticStage> prior_stages;
+    bool feeds_1s5 = false;
+  };
+
+  std::vector<FeedPath> paths;
+  paths.push_back({"metastable_4s_11p548", sel_ar_1s4, population_1s4, 1.0, {}, false});
+  paths.push_back({"resonant_4s_11p624", sel_ar_1s5, population_1s5, 1.0, {}, true});
+  paths.push_back({
+      "1s2_1s3_to_metastable_4s_11p548", sel_ar_high_4s, population_high_4s,
+      p_high_productive * f_cascade_to_1s4,
+      {excitation_stage("Ar(1s2,1s3) relaxation", tau_high_tot_ns)}, false});
+  paths.push_back({
+      "1s2_1s3_to_resonant_4s_11p624", sel_ar_high_4s, population_high_4s,
+      p_high_productive * f_cascade_to_1s5,
+      {excitation_stage("Ar(1s2,1s3) relaxation", tau_high_tot_ns)}, true});
+  paths.push_back({
+      "upper_to_metastable_4s_11p548", sel_ar_upper, population_upper,
+      w_upper_to_1s * p_upper_productive * f_cascade_to_1s4,
+      {excitation_stage("Ar** productive cascade", tau_upper_tot_ns)}, false});
+  paths.push_back({
+      "upper_to_resonant_4s_11p624", sel_ar_upper, population_upper,
+      w_upper_to_1s * p_upper_productive * f_cascade_to_1s5,
+      {excitation_stage("Ar** productive cascade", tau_upper_tot_ns)}, true});
+
   const std::string prefix = mixture_name(gas) + "_VUV_Ar2nd";
+  for (const auto& path : paths) {
+    if (path.source_population <= 0.0 || path.feed_probability <= 0.0) {
+      continue;
+    }
 
-  push_component(out, prefix + "_1s4_1s5_singlet", "VUV", sel_ar_precursor, peaks,
-                 p_precursor_population,
-                 p_precursor_population * path_precursor * singlet_factor,
-                 path_precursor * singlet_factor, tau_s, mc_samples);
-  push_component(out, prefix + "_1s2_1s3_singlet", "VUV", sel_ar_high_4s, peaks,
-                 p_high_4s_population,
-                 p_high_4s_population * path_high_4s * singlet_factor,
-                 path_high_4s * singlet_factor, tau_s, mc_samples);
-  push_component(out, prefix + "_upper_singlet", "VUV", sel_ar_upper, peaks,
-                 p_upper_population,
-                 p_upper_population * path_upper * singlet_factor,
-                 path_upper * singlet_factor, tau_s, mc_samples);
+    const double p_to_excimer = path.feeds_1s5
+                                    ? p_1s5_to_excimer
+                                    : p_1s4_to_excimer;
+    const double tau_lower_tot_ns = path.feeds_1s5
+                                        ? tau_1s5_tot_ns
+                                        : tau_1s4_tot_ns;
+    const std::string lower_state_name = path.feeds_1s5
+        ? "Ar resonant 4s state (11.624 eV)"
+        : "Ar metastable 4s state (11.548 eV)";
 
-  push_component(out, prefix + "_1s4_1s5_triplet", "VUV", sel_ar_precursor, peaks,
-                 p_precursor_population,
-                 p_precursor_population * path_precursor * triplet_factor,
-                 path_precursor * triplet_factor, tau_t, mc_samples);
-  push_component(out, prefix + "_1s2_1s3_triplet", "VUV", sel_ar_high_4s, peaks,
-                 p_high_4s_population,
-                 p_high_4s_population * path_high_4s * triplet_factor,
-                 path_high_4s * triplet_factor, tau_t, mc_samples);
-  push_component(out, prefix + "_upper_triplet", "VUV", sel_ar_upper, peaks,
-                 p_upper_population,
-                 p_upper_population * path_upper * triplet_factor,
-                 path_upper * triplet_factor, tau_t, mc_samples);
+    if (p_to_excimer > 0.0 && tau_lower_tot_ns > 0.0) {
+      const double path_to_excimer = path.feed_probability * p_to_excimer;
+
+      auto singlet_stages = path.prior_stages;
+      singlet_stages.push_back(excitation_stage(
+          lower_state_name + " -> Ar2* formation", tau_lower_tot_ns));
+      singlet_stages.push_back(emission_stage(
+          "Ar2*(1Sigma) radiative emission", tau_s_tot_ns));
+      push_component(
+          out, prefix + "_" + path.tag + "_to_singlet", "VUV",
+          path.source, second_continuum_peaks, path.source_population,
+          path.source_population * path_to_excimer * singlet_factor,
+          path_to_excimer * singlet_factor, singlet_stages, mc_samples);
+
+      auto triplet_stages = path.prior_stages;
+      triplet_stages.push_back(excitation_stage(
+          lower_state_name + " -> Ar2* formation", tau_lower_tot_ns));
+      triplet_stages.push_back(emission_stage(
+          "Ar2*(3Sigma) radiative emission", tau_t_tot_ns));
+      push_component(
+          out, prefix + "_" + path.tag + "_to_triplet", "VUV",
+          path.source, second_continuum_peaks, path.source_population,
+          path.source_population * path_to_excimer * triplet_factor,
+          path_to_excimer * triplet_factor, triplet_stages, mc_samples);
+    }
+
+    if (path.feeds_1s5 && p_1s5_direct > 0.0 && tau_1s5_tot_ns > 0.0) {
+      const double direct_path_probability =
+          path.feed_probability * p_1s5_direct;
+      auto direct_stages = path.prior_stages;
+      // The same lower-state tau_tot is used for both possible successful
+      // exits. Conditioned on direct emission, the event time is still drawn
+      // from Exp(sum Gamma) rather than from Exp(r * tau_atomic) alone.
+      direct_stages.push_back(emission_stage(
+          "Ar resonant 11.624 eV trapped direct emission",
+          tau_1s5_tot_ns));
+      push_component(
+          out, prefix + "_" + path.tag + "_direct_resonant", "VUV",
+          path.source, direct_line_peaks, path.source_population,
+          path.source_population * direct_path_probability * scale,
+          direct_path_probability * scale, direct_stages, mc_samples);
+    }
+  }
 }
 
 inline std::vector<KineticComponent> build_arcf4_kinetic_components(
@@ -733,6 +1066,27 @@ inline std::vector<KineticComponent> build_arcf4_kinetic_components(
   const double PAr_3rd = pget(p, "P_Ar3rd");
   const double p_CF3_uv = pget(p, "P_CF3_uv_dir");
 
+  // Radiative lifetimes are converted into effective total lifetimes by
+  // adding every available collisional loss rate. Missing optional CF3/CF4
+  // quenching coefficients default to zero, so the explicit 15 ns lifetime is
+  // retained until a measured coefficient is supplied in the CSV.
+  const double tau_cf3 = std::max(pget(p, "tau_CF3_ns", 15.0), 1.0e-30);
+  const double cf3_total_rate =
+      1.0 / tau_cf3 +
+      n * (fraction_of(gas, "ar") * pget(p, "K_CF3_Q_Ar", 0.0) +
+           fraction_of(gas, "cf4") * pget(p, "K_CF3_Q_CF4", 0.0) +
+           fraction_of(gas, "he") * pget(p, "K_CF3_Q_He", 0.0) +
+           fraction_of(gas, "n2") * pget(p, "K_CF3_Q_N2", 0.0) +
+           fraction_of(gas, "ic4h10") * pget(p, "K_CF3_Q_IC4H10", 0.0));
+  const double tau_cf3_tot = lifetime_from_total_rate_ns(cf3_total_rate);
+
+  const double tau_cf4_uv =
+      std::max(pget(p, "tau_CF4_UV_ns", 15.0), 1.0e-30);
+  const double cf4_uv_total_rate =
+      (1.0 / tau_cf4_uv) * (1.0 + pget(p, "tau_uv_K_CF4_Q_CF4") * n * f);
+  const double tau_cf4_uv_tot =
+      lifetime_from_total_rate_ns(cf4_uv_total_rate);
+
   const auto p2nd = read_optional_parameter_csv_values(ar2nd_parameter_csv(parameter_dir));
   const double br_cf4_d_to_x = clamp_value(pget(p2nd, "Br_CF4_D_to_X", pget(p, "Br_CF4_D_to_X", 0.1)), 0.0, 1.0);
   const double lambda_cf4_d_to_x_nm = pget(p2nd, "lambda_CF4_D_to_X_nm", 155.0);
@@ -740,21 +1094,31 @@ inline std::vector<KineticComponent> build_arcf4_kinetic_components(
 
   const double denom_dbl = n * f * K2 + n * (1.0 - f) * K + 1.0 / 30.0;
   const double frac_dbl_to_cf4 = safe_ratio(K2 * n * f, denom_dbl);
+  const double tau_dbl_tot = lifetime_from_total_rate_ns(denom_dbl);
 
   const double frac1 = safe_ratio(f * n, f * n + K1);
   const double frac2 = safe_ratio(1.0, 1.0 + K3 * n * f);
   const double denom3 = (1.0 / tau_3rd) + f * n * K4;
   const double frac3 = safe_ratio(f * n * K4, denom3);
   const double frac4 = safe_ratio(1.0 / tau_3rd, denom3);
+  const double tau_3rd_tot = lifetime_from_total_rate_ns(denom3);
 
   std::vector<KineticComponent> out;
 
   const double vis_cf3 = N * p_CF3_vis * P_CF3;
   const double vis_ar = N * frac_dbl_to_cf4 * p_DbleStar * P_Ar_dbl;
-  push_component(out, "ArCF4_VIS_CF3_direct", "VIS", sel_cf3, peaks_cf3_visible(), P_CF3,
-                 vis_cf3, p_CF3_vis, 0.0, mc_samples);
-  push_component(out, "ArCF4_VIS_ArDbleStar_transfer", "VIS", sel_ar_dbl, peaks_cf3_visible(), P_Ar_dbl,
-                 vis_ar, frac_dbl_to_cf4 * p_DbleStar, 30.0, mc_samples);
+  push_component(out, "ArCF4_VIS_CF3_direct", "VIS", sel_cf3,
+                 peaks_cf3_visible(), P_CF3, vis_cf3, p_CF3_vis,
+                 std::vector<KineticStage>{
+                     emission_stage("CF3* visible emission", tau_cf3_tot)},
+                 mc_samples);
+  push_component(out, "ArCF4_VIS_ArDbleStar_transfer", "VIS", sel_ar_dbl,
+                 peaks_cf3_visible(), P_Ar_dbl, vis_ar,
+                 frac_dbl_to_cf4 * p_DbleStar,
+                 std::vector<KineticStage>{
+                     excitation_stage("Ar** -> CF3* transfer", tau_dbl_tot),
+                     emission_stage("CF3* visible emission", tau_cf3_tot)},
+                 mc_samples);
 
   // CF4+(D)->CF4+(X) branch from the current scintillation scheme:
   // Y_150 = Br_D_to_X * Y_CF4,UV.  It is an added VUV branch relative to the
@@ -766,19 +1130,49 @@ inline std::vector<KineticComponent> build_arcf4_kinetic_components(
   const double uv_ar3_transfer = N * (frac1 * frac2) * (frac3 * P_Ar3rd * PAr_3rd);
   const double uv_ar3_direct = N * (tercer_continuo * frac4 * P_Ar3rd);
 
-  push_component(out, "ArCF4_UV_CF3_direct", "UV", sel_cf3, peaks_cf3_uv(), P_CF3,
-                 uv_cf3, p_CF3_uv * p_CF3_vis, 0.0, mc_samples);
-  push_component(out, "ArCF4_UV_ArDbleStar_transfer", "UV", sel_ar_dbl, peaks_cf3_uv(), P_Ar_dbl,
-                 uv_ar_dbl, p_CF3_uv * frac_dbl_to_cf4 * p_DbleStar, 30.0, mc_samples);
-  push_component(out, "ArCF4_UV_CF4_direct", "UV", sel_cf4, peaks_cf4_uv(), P_CF4,
-                 uv_cf4_total, frac1 * frac2 * p_CF4_dir, 0.0, mc_samples);
+  push_component(out, "ArCF4_UV_CF3_direct", "UV", sel_cf3,
+                 peaks_cf3_uv(), P_CF3, uv_cf3,
+                 p_CF3_uv * p_CF3_vis,
+                 std::vector<KineticStage>{
+                     emission_stage("CF3* UV emission", tau_cf3_tot)},
+                 mc_samples);
+  push_component(out, "ArCF4_UV_ArDbleStar_transfer", "UV", sel_ar_dbl,
+                 peaks_cf3_uv(), P_Ar_dbl, uv_ar_dbl,
+                 p_CF3_uv * frac_dbl_to_cf4 * p_DbleStar,
+                 std::vector<KineticStage>{
+                     excitation_stage("Ar** -> CF3* transfer", tau_dbl_tot),
+                     emission_stage("CF3* UV emission", tau_cf3_tot)},
+                 mc_samples);
+  push_component(out, "ArCF4_UV_CF4_direct", "UV", sel_cf4,
+                 peaks_cf4_uv(), P_CF4, uv_cf4_total,
+                 frac1 * frac2 * p_CF4_dir,
+                 std::vector<KineticStage>{
+                     emission_stage("CF4+* UV emission", tau_cf4_uv_tot)},
+                 mc_samples);
   push_component(out, "ArCF4_VUV155_CF4_direct", "VUV", sel_cf4,
-                 peaks_cf4_vuv_branch(lambda_cf4_d_to_x_nm, fwhm_cf4_d_to_x_nm), P_CF4,
-                 uv_cf4_150, br_cf4_d_to_x * frac1 * frac2 * p_CF4_dir, 0.0, mc_samples);
-  push_component(out, "ArCF4_UV_Ar3rd_transfer", "UV", sel_ar3rd, peaks_ar_3rd_uv(), P_Ar3rd,
-                 uv_ar3_transfer, frac1 * frac2 * frac3 * PAr_3rd, tau_3rd, mc_samples);
-  push_component(out, "ArCF4_UV_Ar3rd_third_continuum", "UV", sel_ar3rd, peaks_ar_3rd_uv(), P_Ar3rd,
-                 uv_ar3_direct, tercer_continuo * frac4, tau_3rd, mc_samples);
+                 peaks_cf4_vuv_branch(lambda_cf4_d_to_x_nm,
+                                      fwhm_cf4_d_to_x_nm),
+                 P_CF4, uv_cf4_150,
+                 br_cf4_d_to_x * frac1 * frac2 * p_CF4_dir,
+                 std::vector<KineticStage>{
+                     emission_stage("CF4+*(D->X) VUV emission",
+                                    tau_cf4_uv_tot)},
+                 mc_samples);
+  push_component(out, "ArCF4_UV_Ar3rd_transfer", "UV", sel_ar3rd,
+                 peaks_ar_3rd_uv(), P_Ar3rd, uv_ar3_transfer,
+                 frac1 * frac2 * frac3 * PAr_3rd,
+                 std::vector<KineticStage>{
+                     excitation_stage("Ar third-continuum -> CF4+* transfer",
+                                      tau_3rd_tot),
+                     emission_stage("CF4+* UV emission", tau_cf4_uv_tot)},
+                 mc_samples);
+  push_component(out, "ArCF4_UV_Ar3rd_third_continuum", "UV", sel_ar3rd,
+                 peaks_ar_3rd_uv(), P_Ar3rd, uv_ar3_direct,
+                 tercer_continuo * frac4,
+                 std::vector<KineticStage>{
+                     emission_stage("Ar third-continuum emission",
+                                    tau_3rd_tot)},
+                 mc_samples);
 
   push_ar2nd_components(out, gas, populations, p2nd, mc_samples);
 
@@ -804,8 +1198,12 @@ inline std::vector<KineticComponent> build_arcf4_kinetic_components(
     const double denom = radiative + n * f * k_cf4 + n * (1.0 - f) * k_ar;
     const double prob = pstar * safe_ratio(radiative, denom);
     const double yield = prob * P;
-    push_component(out, "ArCF4_IR_" + s, "IR", sel, peaks_single(line.lambda, 2.5), P,
-                   yield, prob, tau, mc_samples);
+    push_component(
+        out, "ArCF4_IR_" + s, "IR", sel,
+        peaks_single(line.lambda, 2.5), P, yield, prob,
+        std::vector<KineticStage>{emission_stage(
+            "Ar IR " + s + " nm emission", lifetime_from_total_rate_ns(denom))},
+        mc_samples);
   }
 
   return out;
@@ -849,29 +1247,93 @@ inline std::vector<KineticComponent> build_arn2_kinetic_components(
   const double frac_Ar_dbleStar = pget(p, "frac_Ar_dbleStar");
 
   const double radiative_n2 = tau_N2 > 0.0 ? 1.0 / tau_N2 : 0.0;
-  const double factor_N2 = safe_ratio(radiative_n2,
-                                      radiative_n2 + n * f * K_N2_Q_N2 + n * (1.0 - f) * K_N2_Q_Ar);
-  const double factor_Ar_meta = safe_ratio(K_ArMeta_Q_N2c * f * n,
-      (K_ArMeta_Q_N2b + K_ArMeta_Q_N2c) * f * n + K_ArMeta_Q_2Ar * std::pow(1.0 - f, 2) * n * n);
-  const double factor_Ar_res = safe_ratio(K_ArRes_Q_N2c * f * n,
-      (K_ArRes_Q_N2b + K_ArRes_Q_N2c) * f * n + K_ArRes_Q_2Ar * std::pow(1.0 - f, 2) * n * n);
+  const double n2_total_rate =
+      radiative_n2 + n * f * K_N2_Q_N2 +
+      n * (1.0 - f) * K_N2_Q_Ar;
+  const double factor_N2 = safe_ratio(radiative_n2, n2_total_rate);
+  const double tau_n2_tot = lifetime_from_total_rate_ns(n2_total_rate);
+
+  const double meta_total_rate =
+      (K_ArMeta_Q_N2b + K_ArMeta_Q_N2c) * f * n +
+      K_ArMeta_Q_2Ar * std::pow(1.0 - f, 2) * n * n;
+  const double res_total_rate =
+      (K_ArRes_Q_N2b + K_ArRes_Q_N2c) * f * n +
+      K_ArRes_Q_2Ar * std::pow(1.0 - f, 2) * n * n;
+  const double factor_Ar_meta =
+      safe_ratio(K_ArMeta_Q_N2c * f * n, meta_total_rate);
+  const double factor_Ar_res =
+      safe_ratio(K_ArRes_Q_N2c * f * n, res_total_rate);
+  const double tau_meta_tot = lifetime_from_total_rate_ns(meta_total_rate);
+  const double tau_res_tot = lifetime_from_total_rate_ns(res_total_rate);
+
+  const Ar2ndKineticRates ar2nd_rates = ar2nd_rates_for_mixture(p2nd, gas);
+  const double tau_upper =
+      std::max(pget(p2nd, "tau_Ar_dbleStar_ns", 30.0), 1.0e-30);
+  const double upper_productive_rate =
+      1.0 / tau_upper + n * ar2nd_rates.argon_fraction * ar2nd_rates.upper_ar;
+  const double upper_total_rate =
+      upper_productive_rate + n * ar2nd_rates.upper_additives;
+  const double tau_upper_tot = lifetime_from_total_rate_ns(upper_total_rate);
 
   std::vector<KineticComponent> out;
   const auto n2_peaks = peaks_n2_second_positive();
 
-  push_component(out, "ArN2_UV_N2_C_direct", "UV", sel_n2, n2_peaks, P_N2_pop,
-                 Nnorm * factor_N2 * (P_N2_pop * P_N2),
-                 factor_N2 * P_N2, tau_N2, mc_samples);
-  push_component(out, "ArN2_UV_ArMeta_to_N2C", "UV", sel_ar_meta, n2_peaks, P_Ar_meta,
+  push_component(out, "ArN2_UV_N2_C_direct", "UV", sel_n2, n2_peaks,
+                 P_N2_pop, Nnorm * factor_N2 * (P_N2_pop * P_N2),
+                 factor_N2 * P_N2,
+                 std::vector<KineticStage>{
+                     emission_stage("N2(C) second-positive emission",
+                                    tau_n2_tot)},
+                 mc_samples);
+  push_component(out, "ArN2_UV_ArMeta_to_N2C", "UV", sel_ar_meta,
+                 n2_peaks, P_Ar_meta,
                  Nnorm * factor_N2 * (P_Ar_meta * factor_Ar_meta),
-                 factor_N2 * factor_Ar_meta, tau_N2, mc_samples);
-  push_component(out, "ArN2_UV_ArRes_to_N2C", "UV", sel_ar_res, n2_peaks, P_Ar_res,
+                 factor_N2 * factor_Ar_meta,
+                 std::vector<KineticStage>{
+                     excitation_stage("Ar metastable -> N2(C) transfer",
+                                      tau_meta_tot),
+                     emission_stage("N2(C) second-positive emission",
+                                    tau_n2_tot)},
+                 mc_samples);
+  push_component(out, "ArN2_UV_ArRes_to_N2C", "UV", sel_ar_res,
+                 n2_peaks, P_Ar_res,
                  Nnorm * factor_N2 * (P_Ar_res * factor_Ar_res),
-                 factor_N2 * factor_Ar_res, tau_N2, mc_samples);
-  const double ar_dbl_mix = frac_Ar_dbleStar * factor_Ar_meta + (1.0 - frac_Ar_dbleStar) * factor_Ar_res;
-  push_component(out, "ArN2_UV_ArDbleStar_to_N2C", "UV", sel_ar_dbl, n2_peaks, P_Ar_dbl,
-                 Nnorm * factor_N2 * P_Ar_dbl * P_Ar_dbleStar * ar_dbl_mix,
-                 factor_N2 * P_Ar_dbleStar * ar_dbl_mix, tau_N2, mc_samples);
+                 factor_N2 * factor_Ar_res,
+                 std::vector<KineticStage>{
+                     excitation_stage("Ar resonant -> N2(C) transfer",
+                                      tau_res_tot),
+                     emission_stage("N2(C) second-positive emission",
+                                    tau_n2_tot)},
+                 mc_samples);
+
+  // Keep the metastable and resonant Ar** branches separate: a weighted
+  // average lifetime would not reproduce the true mixture of exponentials.
+  const double ar_dbl_meta_probability =
+      factor_N2 * P_Ar_dbleStar * frac_Ar_dbleStar * factor_Ar_meta;
+  const double ar_dbl_res_probability =
+      factor_N2 * P_Ar_dbleStar * (1.0 - frac_Ar_dbleStar) * factor_Ar_res;
+  push_component(out, "ArN2_UV_ArDbleStar_to_N2C_via_meta", "UV",
+                 sel_ar_dbl, n2_peaks, P_Ar_dbl,
+                 Nnorm * P_Ar_dbl * ar_dbl_meta_probability,
+                 ar_dbl_meta_probability,
+                 std::vector<KineticStage>{
+                     excitation_stage("Ar** upper cascade", tau_upper_tot),
+                     excitation_stage("Ar metastable -> N2(C) transfer",
+                                      tau_meta_tot),
+                     emission_stage("N2(C) second-positive emission",
+                                    tau_n2_tot)},
+                 mc_samples);
+  push_component(out, "ArN2_UV_ArDbleStar_to_N2C_via_res", "UV",
+                 sel_ar_dbl, n2_peaks, P_Ar_dbl,
+                 Nnorm * P_Ar_dbl * ar_dbl_res_probability,
+                 ar_dbl_res_probability,
+                 std::vector<KineticStage>{
+                     excitation_stage("Ar** upper cascade", tau_upper_tot),
+                     excitation_stage("Ar resonant -> N2(C) transfer",
+                                      tau_res_tot),
+                     emission_stage("N2(C) second-positive emission",
+                                    tau_n2_tot)},
+                 mc_samples);
 
   push_ar2nd_components(out, gas, populations, p2nd, mc_samples);
 
@@ -892,8 +1354,12 @@ inline std::vector<KineticComponent> build_arn2_kinetic_components(
     const double denom = radiative + n * f * k_n2 + n * (1.0 - f) * k_ar;
     const double prob = pstar * safe_ratio(radiative, denom);
     const double yield = prob * P;
-    push_component(out, "ArN2_IR_" + s, "IR", sel, peaks_single(line.lambda, 2.8), P,
-                   yield, prob, tau, mc_samples);
+    push_component(
+        out, "ArN2_IR_" + s, "IR", sel,
+        peaks_single(line.lambda, 2.8), P, yield, prob,
+        std::vector<KineticStage>{emission_stage(
+            "Ar IR " + s + " nm emission", lifetime_from_total_rate_ns(denom))},
+        mc_samples);
   }
 
   return out;
@@ -922,6 +1388,20 @@ inline std::vector<KineticComponent> build_hecf4_kinetic_components(
   const double K3 = pget(p, "tau_uv_K_CF4_Q_CF4");
   const double p_CF4_dir = pget(p, "P_CF4_dir");
   const double p_CF3_uv = pget(p, "P_CF3_uv_dir");
+
+  const double tau_cf3 = std::max(pget(p, "tau_CF3_ns", 15.0), 1.0e-30);
+  const double cf3_total_rate =
+      1.0 / tau_cf3 +
+      n * (fraction_of(gas, "he") * pget(p, "K_CF3_Q_He", 0.0) +
+           fraction_of(gas, "cf4") * pget(p, "K_CF3_Q_CF4", 0.0));
+  const double tau_cf3_tot = lifetime_from_total_rate_ns(cf3_total_rate);
+  const double tau_cf4_uv =
+      std::max(pget(p, "tau_CF4_UV_ns", 15.0), 1.0e-30);
+  const double cf4_uv_total_rate =
+      (1.0 / tau_cf4_uv) * (1.0 + K3 * n * f);
+  const double tau_cf4_uv_tot =
+      lifetime_from_total_rate_ns(cf4_uv_total_rate);
+
   const double frac1 = safe_ratio(f * n, f * n + K1);
   const double frac2 = safe_ratio(1.0, 1.0 + K3 * n * f);
   const auto p2nd = read_optional_parameter_csv_values(ar2nd_parameter_csv(parameter_dir));
@@ -930,17 +1410,35 @@ inline std::vector<KineticComponent> build_hecf4_kinetic_components(
   const double fwhm_cf4_d_to_x_nm = pget(p2nd, "fwhm_CF4_D_to_X_nm", 10.0);
 
   std::vector<KineticComponent> out;
-  push_component(out, "HeCF4_VIS_CF3_direct_ArCF4Fit", "VIS", sel_cf3, peaks_cf3_visible(), P_CF3,
-                 N * p_CF3_vis * P_CF3, p_CF3_vis, 0.0, mc_samples);
-  push_component(out, "HeCF4_UV_CF3_direct_ArCF4Fit", "UV", sel_cf3, peaks_cf3_uv(), P_CF3,
-                 p_CF3_uv * N * p_CF3_vis * P_CF3, p_CF3_uv * p_CF3_vis, 0.0, mc_samples);
+  push_component(
+      out, "HeCF4_VIS_CF3_direct_ArCF4Fit", "VIS", sel_cf3,
+      peaks_cf3_visible(), P_CF3, N * p_CF3_vis * P_CF3, p_CF3_vis,
+      std::vector<KineticStage>{
+          emission_stage("CF3* visible emission", tau_cf3_tot)},
+      mc_samples);
+  push_component(
+      out, "HeCF4_UV_CF3_direct_ArCF4Fit", "UV", sel_cf3,
+      peaks_cf3_uv(), P_CF3, p_CF3_uv * N * p_CF3_vis * P_CF3,
+      p_CF3_uv * p_CF3_vis,
+      std::vector<KineticStage>{
+          emission_stage("CF3* UV emission", tau_cf3_tot)},
+      mc_samples);
   const double uv_cf4_total = N * frac1 * frac2 * p_CF4_dir * P_CF4;
-  push_component(out, "HeCF4_UV_CF4_direct_ArCF4Fit", "UV", sel_cf4, peaks_cf4_uv(), P_CF4,
-                 uv_cf4_total, frac1 * frac2 * p_CF4_dir, 0.0, mc_samples);
-  push_component(out, "HeCF4_VUV155_CF4_direct_ArCF4Fit", "VUV", sel_cf4,
-                 peaks_cf4_vuv_branch(lambda_cf4_d_to_x_nm, fwhm_cf4_d_to_x_nm), P_CF4,
-                 br_cf4_d_to_x * uv_cf4_total,
-                 br_cf4_d_to_x * frac1 * frac2 * p_CF4_dir, 0.0, mc_samples);
+  push_component(
+      out, "HeCF4_UV_CF4_direct_ArCF4Fit", "UV", sel_cf4,
+      peaks_cf4_uv(), P_CF4, uv_cf4_total, frac1 * frac2 * p_CF4_dir,
+      std::vector<KineticStage>{
+          emission_stage("CF4+* UV emission", tau_cf4_uv_tot)},
+      mc_samples);
+  push_component(
+      out, "HeCF4_VUV155_CF4_direct_ArCF4Fit", "VUV", sel_cf4,
+      peaks_cf4_vuv_branch(lambda_cf4_d_to_x_nm,
+                           fwhm_cf4_d_to_x_nm),
+      P_CF4, br_cf4_d_to_x * uv_cf4_total,
+      br_cf4_d_to_x * frac1 * frac2 * p_CF4_dir,
+      std::vector<KineticStage>{
+          emission_stage("CF4+*(D->X) VUV emission", tau_cf4_uv_tot)},
+      mc_samples);
   return out;
 }
 
@@ -1004,6 +1502,9 @@ const PhotonSourceSite* sample_source_site(
 double sample_wavelength_nm(const KineticComponent& component,
                             TRandom3& random, double minimum_nm,
                             double maximum_nm);
+
+EmissionDelaySample sample_emission_delay(
+    const KineticComponent& component, TRandom3& random);
 
 double sample_emission_delay_ns(const KineticComponent& component,
                                 TRandom3& random);
