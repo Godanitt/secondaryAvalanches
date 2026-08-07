@@ -65,9 +65,9 @@ std::vector<LevelPopulation> populations_from_sites(
   return populations;
 }
 
-const PhotonSourceSite* sample_source_site(
+std::vector<const PhotonSourceSite*> matching_source_sites(
     const KineticComponent& component, const std::vector<LevelInfo>& levels,
-    const std::vector<PhotonSourceSite>& sites, TRandom3& random) {
+    const std::vector<PhotonSourceSite>& sites) {
   std::vector<const PhotonSourceSite*> matching;
   matching.reserve(sites.size());
   for (const auto& site : sites) {
@@ -77,13 +77,22 @@ const PhotonSourceSite* sample_source_site(
       matching.push_back(&site);
     }
   }
-  if (matching.empty()) {
-    // A photon must inherit x-y-z-t from a collision that actually belongs to
-    // its source population. Falling back to an unrelated collision corrupts
-    // the wavelength-time correlation.
-    return nullptr;
-  }
-  return matching[static_cast<std::size_t>(random.Integer(matching.size()))];
+  return matching;
+}
+
+const PhotonSourceSite* sample_source_site(
+    const std::vector<const PhotonSourceSite*>& matching_sites,
+    TRandom3& random) {
+  if (matching_sites.empty()) return nullptr;
+  return matching_sites[static_cast<std::size_t>(
+      random.Integer(matching_sites.size()))];
+}
+
+const PhotonSourceSite* sample_source_site(
+    const KineticComponent& component, const std::vector<LevelInfo>& levels,
+    const std::vector<PhotonSourceSite>& sites, TRandom3& random) {
+  const auto matching = matching_source_sites(component, levels, sites);
+  return sample_source_site(matching, random);
 }
 
 double sample_wavelength_nm(const KineticComponent& component,

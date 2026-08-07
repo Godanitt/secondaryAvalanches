@@ -1495,6 +1495,16 @@ std::vector<LevelPopulation> populations_from_sites(
     const std::vector<LevelInfo>& levels,
     const std::vector<PhotonSourceSite>& sites);
 
+std::vector<const PhotonSourceSite*> matching_source_sites(
+    const KineticComponent& component, const std::vector<LevelInfo>& levels,
+    const std::vector<PhotonSourceSite>& sites);
+
+const PhotonSourceSite* sample_source_site(
+    const std::vector<const PhotonSourceSite*>& matching_sites,
+    TRandom3& random);
+
+// Compatibility overload. Prefer building matching_source_sites once per
+// kinetic component and sampling from that pool for every emitted photon.
 const PhotonSourceSite* sample_source_site(
     const KineticComponent& component, const std::vector<LevelInfo>& levels,
     const std::vector<PhotonSourceSite>& sites, TRandom3& random);

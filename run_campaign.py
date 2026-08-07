@@ -443,7 +443,7 @@ def read_root(path: Path, *, field_v_cm: float | None = None) -> AlphaPoint:
         # neither invalidate nor alter the gain point, so they are ignored.
         required_objects = {
             "gasData", "dataPerPrimaryElectron", "dataPerAvalanche",
-            "mcData", "photonTransportData",
+            "photonTransportData",
         }
         missing_objects = required_objects - names
         if missing_objects:
@@ -2405,6 +2405,7 @@ def run_campaign(
     space_charge_override: bool | None = None,
     excitation_positions_override: bool | None = None,
     gas_transport_override: bool | None = None,
+    photo_absorption_override: bool | None = None,
     skip_build: bool = False,
 ) -> None:
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -2463,7 +2464,11 @@ def run_campaign(
         mc_samples=int(config.get("mc_samples", 10)),
         random_seed=int(config.get("random_seed", 12345)),
         parameters_dir=str(config.get("parameters_dir", "data/parameters")),
-        photo_absorption=bool(config.get("photo_absorption", True)),
+        photo_absorption=(
+            bool(config.get("photo_absorption", True))
+            if photo_absorption_override is None
+            else photo_absorption_override
+        ),
         photon_transport_cut_ev=float(
             config.get("photon_transport_cut_ev", 0.0)
         ),
@@ -2855,6 +2860,15 @@ def parser() -> argparse.ArgumentParser:
         help="Enable/disable Magboltz drift/diffusion/Townsend measurements.",
     )
     command.add_argument(
+        "--photo-absorption",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Enable/disable gas photoabsorption/photoionisation. When disabled, "
+            "transported photons propagate geometrically to the electrodes."
+        ),
+    )
+    command.add_argument(
         "--no-build", action="store_true",
         help="Skip CMake configure/build (mainly for advanced scripting).",
     )
@@ -2870,6 +2884,7 @@ def main() -> None:
         space_charge_override=args.space_charge,
         excitation_positions_override=args.excitation_positions,
         gas_transport_override=args.gas_transport,
+        photo_absorption_override=args.photo_absorption,
         skip_build=args.no_build,
     )
 

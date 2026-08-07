@@ -8,7 +8,7 @@ common,,k_Ar_4s_Q_2Ar_m6_s,$k_{\mathrm{Ar}^*(4s)+2\mathrm{Ar}}$,1e-44,m^6/s,True
 common,,tau_Ar_1s5_ns,$\tau_{\mathrm{Ar}^*(1s5)}$,7.0,ns,True,Updated TFM model,Radiative lifetime of the 11.624 eV resonant Ar state before resonant re-emissions.,True,active
 common,,r,$r$,150.0,dimensionless,True,Updated TFM model,Inverse escape factor / mean number of resonant absorption-re-emission cycles: g=1/r=1/150. With tau_Ar4s=7 ns; tau_eff=r*tau=1050 ns and Gamma_direct=1/tau_eff.,True,active
 common,,energy_Ar_1s5_eV,$E_{\mathrm{Ar}^*(1s5)}$,11.624,eV,True,Garfield/Degrad Ar level,Energy of the resonant direct-emission state; lambda is derived as hc/E.,True,active
-common,,sigma_Ar_1s5_direct_nm,$\sigma_{1s5}$,0.25,nm,True,Plotting model,Narrow Gaussian sigma used to represent the direct Ar(1s5) line near 106.66 nm.,True,active
+common,,sigma_Ar_1s5_direct_nm,$\sigma_{1s5}$,0.424660900,nm,True,Plotting model,Effective Gaussian display width for the direct resonant Ar 4s line near 106.66 nm; sigma corresponds to an aesthetic FWHM of 1.0 nm (not a physical pressure-broadening width).,True,active
 common,,f_1Sigma,$f_{1\Sigma}$,0.1,dimensionless,True,TFM,Singlet excimer formation fraction.,True,active
 common,,f_3Sigma,$f_{3\Sigma}$,0.9,dimensionless,True,TFM,Triplet excimer formation fraction.,True,active
 common,,tau_S_ns,$\tau_{\mathrm{Ar}_2^*(^1\Sigma)}$,4.5,ns,True,Updated TFM model,Singlet excimer lifetime used in the updated second-continuum model.,True,active

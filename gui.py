@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PySide6 interface for integrated secondary-avalanche campaigns."""
+"""PySide6 interface for electric-field campaigns and GIF generation."""
 
 from __future__ import annotations
 
@@ -14,7 +14,10 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -23,7 +26,9 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QSpinBox,
     QSplitter,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -39,6 +44,7 @@ RUNTIME_OPTION_DEFAULTS = {
     "space_charge": False,
     "record_excitation_positions": True,
     "measure_gas_transport": False,
+    "photo_absorption": True,
 }
 
 
@@ -82,7 +88,7 @@ class CampaignTab(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.settings = QSettings("MaximumVoltage", "secondaryAvalanches")
+        self.settings = QSettings("MaximumVoltage", "electricUniform")
 
         self.process = QProcess(self)
         self.process.setWorkingDirectory(str(ROOT))
@@ -110,6 +116,12 @@ class CampaignTab(QWidget):
         self.gas_transport.setToolTip(
             "Calculate drift velocity, diffusion, Townsend and attachment "
             "at the exact simulated field. Disabled by default."
+        )
+        self.photo_absorption = QCheckBox("Photo absorption")
+        self.photo_absorption.setToolTip(
+            "Enable gas photoabsorption and photoionisation during photon "
+            "transport. When disabled, photons above the transport threshold "
+            "propagate geometrically to the electrodes; cathode QE remains active."
         )
         self.load_campaign_options(initial_yaml)
 
@@ -168,6 +180,7 @@ class CampaignTab(QWidget):
         options.addWidget(self.space_charge)
         options.addWidget(self.excitation_positions)
         options.addWidget(self.gas_transport)
+        options.addWidget(self.photo_absorption)
         options.addStretch()
 
         self.table = QTableWidget(0, 12)
@@ -276,6 +289,9 @@ class CampaignTab(QWidget):
         self.gas_transport.setChecked(
             read_yaml_bool(text, "measure_gas_transport", False)
         )
+        self.photo_absorption.setChecked(
+            read_yaml_bool(text, "photo_absorption", True)
+        )
 
     def save_yaml(self):
         text = self.editor.toPlainText()
@@ -285,6 +301,9 @@ class CampaignTab(QWidget):
         )
         text = write_yaml_bool(
             text, "measure_gas_transport", self.gas_transport.isChecked()
+        )
+        text = write_yaml_bool(
+            text, "photo_absorption", self.photo_absorption.isChecked()
         )
         if not text.endswith("\n"):
             text += "\n"
@@ -333,6 +352,7 @@ class CampaignTab(QWidget):
         self.space_charge.setEnabled(not running)
         self.excitation_positions.setEnabled(not running)
         self.gas_transport.setEnabled(not running)
+        self.photo_absorption.setEnabled(not running)
         self.open_fits_button.setEnabled(True)
         self.update_fit_button()
 
@@ -353,9 +373,9 @@ class CampaignTab(QWidget):
         self.open_fit_button.setEnabled(False)
         self.progress.setVisible(True)
         self.progress.setRange(0, 0)
-        self.progress.setFormat("Configuring and building secondaryAvalanches…")
+        self.progress.setFormat("Configuring and building uniformE…")
         self.set_running_controls(True)
-        self.status.setText("Configuring and building secondaryAvalanches…")
+        self.status.setText("Configuring and building uniformE…")
 
         arguments = [
             "run_campaign.py",
@@ -365,6 +385,8 @@ class CampaignTab(QWidget):
             else "--no-excitation-positions",
             "--gas-transport" if self.gas_transport.isChecked()
             else "--no-gas-transport",
+            "--photo-absorption" if self.photo_absorption.isChecked()
+            else "--no-photo-absorption",
         ]
         self.process.start(PYTHON, arguments)
 
@@ -438,7 +460,7 @@ class CampaignTab(QWidget):
     def handle_event(self, event):
         event_type = event.get("type")
         if event_type == "build_started":
-            self.status.setText("Configuring and building secondaryAvalanches…")
+            self.status.setText("Configuring and building uniformE…")
             return
         if event_type == "build_finished":
             self.status.setText("Build completed · starting campaign")
@@ -673,13 +695,213 @@ class CampaignTab(QWidget):
             QMessageBox.critical(self, "Campaign failed", message)
 
 
+class GifTab(QWidget):
+    GAS_OPTIONS = [
+        ("Argon", "ar"),
+        ("Helium", "he"),
+        ("CF4", "cf4"),
+        ("N2", "n2"),
+        ("CO2", "co2"),
+        ("CH4", "ch4"),
+        ("Isobutane", "ic4h10"),
+        ("C2H2F4", "c2h2f4"),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.process = QProcess(self)
+        self.process.setWorkingDirectory(str(ROOT))
+        self.process.readyReadStandardOutput.connect(self.read_output)
+        self.process.readyReadStandardError.connect(self.read_error)
+        self.process.finished.connect(self.finished)
+
+        self.gas1 = self.gas_box(allow_empty=False)
+        self.gas2 = self.gas_box(allow_empty=True)
+        self.gas3 = self.gas_box(allow_empty=True)
+        self.set_gas(self.gas1, "ar")
+        self.set_gas(self.gas2, "cf4")
+        self.set_gas(self.gas3, "")
+
+        self.composition1 = self.double_box(0.0, 100.0, 99.0, 4)
+        self.composition2 = self.double_box(0.0, 100.0, 1.0, 4)
+        self.composition3 = self.double_box(0.0, 100.0, 0.0, 4)
+
+        self.pressure = self.double_box(0.001, 20.0, 1.0, 3)
+        self.gap = self.double_box(0.001, 10.0, 0.05, 3)
+        self.height = self.double_box(1.0, 10.0, 1.5, 2)
+        self.npe = QSpinBox()
+        self.npe.setRange(1, 10000)
+        self.npe.setValue(1)
+        self.tmax = self.double_box(0.001, 1.0e6, 10.0, 3)
+        self.frames = QSpinBox()
+        self.frames.setRange(2, 500)
+        self.frames.setValue(80)
+        self.space_charge = QCheckBox()
+        self.move_ions = QCheckBox()
+        self.move_ions.setChecked(True)
+        self.ion_speed = self.double_box(0.0, 1.0, 1.0e-4, 8)
+        self.ion_speed.setSingleStep(1.0e-5)
+        self.ion_speed.setSuffix(" cm/ns")
+        self.move_ions.toggled.connect(self.ion_speed.setEnabled)
+
+        self.mode = QComboBox()
+        self.mode.addItems(["Electric field", "Target gain"])
+        self.value = self.double_box(0.001, 5000.0, 40.0, 4)
+        self.mode.currentIndexChanged.connect(self.update_value_label)
+        self.value_label = QLabel("Field [kV/cm]")
+        self.total_label = QLabel("Total composition: 100 %")
+
+        for box in (self.composition1, self.composition2, self.composition3):
+            box.valueChanged.connect(self.update_total)
+        for box in (self.gas2, self.gas3):
+            box.currentIndexChanged.connect(self.update_total)
+
+        form = QFormLayout()
+        form.addRow("Gas 1", self.gas1)
+        form.addRow("Gas 1 fraction [%]", self.composition1)
+        form.addRow("Gas 2", self.gas2)
+        form.addRow("Gas 2 fraction [%]", self.composition2)
+        form.addRow("Gas 3", self.gas3)
+        form.addRow("Gas 3 fraction [%]", self.composition3)
+        form.addRow("", self.total_label)
+        form.addRow("Pressure [bar]", self.pressure)
+        form.addRow("Gap [mm]", self.gap)
+        form.addRow("Height factor", self.height)
+        form.addRow("Primary electrons", self.npe)
+        form.addRow("Field or gain", self.mode)
+        form.addRow(self.value_label, self.value)
+        form.addRow("t max [ns]", self.tmax)
+        form.addRow("Frames", self.frames)
+        form.addRow("Move ions", self.move_ions)
+        form.addRow("Constant ion speed", self.ion_speed)
+        form.addRow("Space charge", self.space_charge)
+
+        self.generate_button = QPushButton("Generate GIF")
+        self.generate_button.clicked.connect(self.generate)
+        self.status = QLabel("Ready")
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.generate_button)
+        layout.addWidget(self.status)
+        layout.addStretch()
+        self.update_total()
+
+    @classmethod
+    def gas_box(cls, allow_empty: bool) -> QComboBox:
+        box = QComboBox()
+        if allow_empty:
+            box.addItem("None", "")
+        for label, identifier in cls.GAS_OPTIONS:
+            box.addItem(label, identifier)
+        return box
+
+    @staticmethod
+    def set_gas(box: QComboBox, identifier: str) -> None:
+        index = box.findData(identifier)
+        if index >= 0:
+            box.setCurrentIndex(index)
+
+    @staticmethod
+    def double_box(minimum, maximum, value, decimals):
+        box = QDoubleSpinBox()
+        box.setRange(minimum, maximum)
+        box.setDecimals(decimals)
+        box.setValue(value)
+        return box
+
+    def update_value_label(self):
+        self.value_label.setText(
+            "Field [kV/cm]" if self.mode.currentIndex() == 0 else "Target gain"
+        )
+
+    def composition(self) -> list[tuple[str, float]]:
+        pairs = [
+            (str(self.gas1.currentData()), self.composition1.value()),
+            (str(self.gas2.currentData()), self.composition2.value()),
+            (str(self.gas3.currentData()), self.composition3.value()),
+        ]
+        active = [(gas, value) for gas, value in pairs if gas]
+        gases = [gas for gas, _ in active]
+        if len(gases) != len(set(gases)):
+            raise ValueError("The same gas cannot be selected twice")
+        if any(value < 0.0 for _, value in active):
+            raise ValueError("Gas fractions cannot be negative")
+        total = sum(value for _, value in active)
+        if abs(total - 100.0) > 1.0e-6:
+            raise ValueError(f"Gas fractions must add to 100 %, obtained {total:g} %")
+        if not any(value > 0.0 for _, value in active):
+            raise ValueError("At least one gas fraction must be positive")
+        return active
+
+    def update_total(self):
+        values = [self.composition1.value()]
+        if self.gas2.currentData():
+            values.append(self.composition2.value())
+        if self.gas3.currentData():
+            values.append(self.composition3.value())
+        total = sum(values)
+        self.total_label.setText(f"Total composition: {total:g} %")
+
+    def generate(self):
+        try:
+            components = self.composition()
+        except ValueError as error:
+            QMessageBox.warning(self, "Invalid composition", str(error))
+            return
+
+        component_argument = ",".join(
+            f"{gas}:{fraction:.12g}" for gas, fraction in components
+        )
+        arguments = [
+            "run_campaign.py", "--gif",
+            "--components", component_argument,
+            "--pressure-bar", str(self.pressure.value()),
+            "--gap-mm", str(self.gap.value()),
+            "--npe", str(self.npe.value()),
+            "--height-factor", str(self.height.value()),
+            "--tmax-ns", str(self.tmax.value()),
+            "--frames", str(self.frames.value()),
+        ]
+        if self.mode.currentIndex() == 0:
+            arguments += ["--field-kv-cm", str(self.value.value())]
+        else:
+            arguments += ["--gain", str(self.value.value())]
+        arguments += ["--ion-speed-cm-ns", str(self.ion_speed.value())]
+        arguments.append("--move-ions" if self.move_ions.isChecked() else "--no-move-ions")
+        arguments.append("--space-charge" if self.space_charge.isChecked() else "--no-space-charge")
+
+        self.generate_button.setEnabled(False)
+        self.status.setText("Generating GIF")
+        self.process.start(PYTHON, arguments)
+
+    def read_output(self):
+        text = bytes(self.process.readAllStandardOutput()).decode("utf-8", errors="replace")
+        lines = [line for line in text.splitlines() if line.strip()]
+        if lines:
+            self.status.setText(lines[-1])
+
+    def read_error(self):
+        text = bytes(self.process.readAllStandardError()).decode("utf-8", errors="replace")
+        if text.strip():
+            self.status.setText(text.strip().splitlines()[-1])
+
+    def finished(self, exit_code, *_):
+        self.generate_button.setEnabled(True)
+        if exit_code != 0:
+            QMessageBox.critical(self, "GIF", self.status.text())
+
 
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("secondaryAvalanches")
+        self.setWindowTitle("electricUniform")
         self.resize(1050, 760)
-        self.setCentralWidget(CampaignTab())
+
+        tabs = QTabWidget()
+        tabs.addTab(CampaignTab(), "Campaign")
+        tabs.addTab(GifTab(), "GIF")
+        self.setCentralWidget(tabs)
 
 
 if __name__ == "__main__":

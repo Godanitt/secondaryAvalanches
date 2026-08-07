@@ -58,10 +58,8 @@ constexpr int kInelasticType = 3;
 constexpr int kExcitationType = 4;
 constexpr int kSuperelasticType = 5;
 constexpr int kPhotonAbsorbedStatus = -2;
-constexpr int kEnergyBins = 1000;
 constexpr int kExcitationSpatialBins = 128;
 constexpr int kExcitationTimeBins = 256;
-constexpr Long64_t kMaxEnergySamples = 200000;
 constexpr double kInitialTimeRangeNs = 10.0;
 constexpr double kSpaceChargeToleranceCm = 1.0e-5;
 
@@ -206,6 +204,19 @@ struct Config {
   double cathode_half_width_cm() const {
     if (cathode_half_size_cm > 0.0) return cathode_half_size_cm;
     return infinite_electrodes ? transport_half_width_cm() : gap_cm();
+  }
+  // Electron avalanches and optical transport must use the same numerical
+  // transverse domain. Otherwise a valid cathode photoelectron can be queued
+  // outside the Garfield++ Sensor area and terminate without any endpoint or
+  // microscopic collision.
+  double electron_transport_half_width_cm() const {
+    return infinite_electrodes ? transport_half_width_cm()
+                               : xy_half_width_cm();
+  }
+  // Start surface-emitted electrons a small but finite distance inside the
+  // gas. The old 1e-9 cm shift was smaller than typical geometry tolerances.
+  double electron_seed_inset_cm() const {
+    return std::max(1.0e-7, 1.0e-4 * gap_cm());
   }
 };
 
@@ -513,43 +524,6 @@ std::vector<photonemission::LevelInfo> read_level_info(
 //                    Electron-energy and collision callbacks
 // ============================================================================
 
-struct EnergyReservoir {
-  Long64_t seen = 0;
-  std::vector<float> values;
-
-  void reset() {
-    seen = 0;
-    values.clear();
-    values.reserve(static_cast<std::size_t>(kMaxEnergySamples));
-  }
-
-  void add(const double energy_ev, const bool hole) {
-    if (hole || !std::isfinite(energy_ev) || energy_ev < 0.0) return;
-    ++seen;
-    if (static_cast<Long64_t>(values.size()) < kMaxEnergySamples) {
-      values.push_back(static_cast<float>(energy_ev));
-      return;
-    }
-    const Long64_t index = static_cast<Long64_t>(
-        std::floor(gRandom->Uniform(0.0, static_cast<double>(seen))));
-    if (index < kMaxEnergySamples) {
-      values[static_cast<std::size_t>(index)] = static_cast<float>(energy_ev);
-    }
-  }
-
-  double random_energy(const double fallback) const {
-    if (values.empty()) return fallback;
-    return values[static_cast<std::size_t>(gRandom->Integer(values.size()))];
-  }
-};
-
-EnergyReservoir g_energy;
-
-void handle_step(double, double, double, double, double energy,
-                 double, double, double, bool hole) {
-  g_energy.add(energy, hole);
-}
-
 struct CollisionRecorder {
   TH1D* h_levels = nullptr;
   TH3I* h_xyz = nullptr;
@@ -707,9 +681,9 @@ struct SpaceCharge {
   void initialise(const Config& config, MediumMagboltz& gas) {
     if (!config.space_charge) return;
     rings = std::make_unique<ComponentChargedRing>();
-    rings->SetArea(-config.xy_half_width_cm(), -config.xy_half_width_cm(), 0.0,
-                   config.xy_half_width_cm(), config.xy_half_width_cm(),
-                   config.z_max_cm());
+    const double half_width = config.electron_transport_half_width_cm();
+    rings->SetArea(-half_width, -half_width, 0.0,
+                   half_width, half_width, config.z_max_cm());
     rings->SetSpacingTolerance(kSpaceChargeToleranceCm);
     rings->SetMedium(&gas);
     rings->ClearActiveRings();
@@ -719,8 +693,9 @@ struct SpaceCharge {
   void add_new_ions(const Config& config) {
     if (rings == nullptr) return;
     for (const auto& ion : g_collisions.ions_this_avalanche) {
-      if (std::abs(ion[0]) > config.xy_half_width_cm() ||
-          std::abs(ion[1]) > config.xy_half_width_cm() || ion[2] < 0.0 ||
+      const double half_width = config.electron_transport_half_width_cm();
+      if (std::abs(ion[0]) > half_width ||
+          std::abs(ion[1]) > half_width || ion[2] < 0.0 ||
           ion[2] > config.z_max_cm()) {
         continue;
       }
@@ -937,15 +912,40 @@ class PhotonPropagation {
     if (n_tracks == 0) return result;
 
     double stored_energy = result.energy_ev;
+    double garfield_t0_ns = time_ns;
+    double garfield_t1_ns = time_ns;
     photon_transport.GetPhoton(n_tracks - 1, stored_energy, result.x0_cm,
-                               result.y0_cm, result.z0_cm, result.t0_ns,
+                               result.y0_cm, result.z0_cm, garfield_t0_ns,
                                result.x1_cm, result.y1_cm, result.z1_cm,
-                               result.t1_ns, result.status);
+                               garfield_t1_ns, result.status);
     result.energy_ev = stored_energy;
 
+    // TransportPhoton/GetPhoton may report the photon-track clock relative to
+    // the beginning of the optical track rather than preserving the absolute
+    // avalanche/emission clock supplied above.  Never use that internal clock
+    // directly for feedback: doing so makes delayed photons create apparently
+    // prompt secondary avalanches on top of generation 0.
+    //
+    // Preserve only Garfield's elapsed optical time and anchor it to the
+    // absolute kinetic emission time.  This is also safe when Garfield already
+    // returns absolute times because then garfield_t0_ns == time_ns.
+    const double garfield_time_origin_ns =
+        std::isfinite(garfield_t0_ns) ? garfield_t0_ns : 0.0;
+    const double photon_dt_ns =
+        std::isfinite(garfield_t1_ns)
+            ? std::max(0.0, garfield_t1_ns - garfield_time_origin_ns)
+            : 0.0;
+    result.t0_ns = time_ns;
+    result.t1_ns = time_ns + photon_dt_ns;
+
     for (const auto& seed : electron_stack) {
+      const double electron_dt_ns =
+          std::isfinite(seed.pt.t)
+              ? std::max(0.0, seed.pt.t - garfield_time_origin_ns)
+              : photon_dt_ns;
       result.electrons.push_back(
-          {seed.pt.x, seed.pt.y, seed.pt.z, seed.pt.t, seed.pt.energy,
+          {seed.pt.x, seed.pt.y, seed.pt.z,
+           time_ns + electron_dt_ns, seed.pt.energy,
            seed.pt.kx, seed.pt.ky, seed.pt.kz, seed.w});
     }
 
@@ -1078,14 +1078,14 @@ struct OutputHistograms {
                    -geometry.cathode_half_size_cm,
                    geometry.cathode_half_size_cm),
         photoelectron_xy("hPhotoElectronXY",
-                         "Photoelectrons emitted from cathode;x [cm];y [cm]",
+                         "Cathode photoelectron seeds for secondary avalanches;x [cm];y [cm]",
                          c.position_bins, -geometry.cathode_half_size_cm,
                          geometry.cathode_half_size_cm, c.position_bins,
                          -geometry.cathode_half_size_cm,
                          geometry.cathode_half_size_cm),
         photoelectron_time_energy(
             "hPhotoElectronTimeEnergy",
-            "Photoelectron time and energy;time [ns];energy [eV]",
+            "Cathode photoelectron seed time and energy;time [ns];energy [eV]",
             c.time_bins, 0.0, time_max_ns, c.electron_energy_bins, 0.0,
             c.electron_energy_max_ev),
         photoabsorption_xyz(
@@ -1206,15 +1206,13 @@ struct ElectronSeed {
   SeedType type = SeedType::Primary;
 };
 
-ElectronSeed primary_seed(const Config& config, const int event,
+ElectronSeed primary_seed(const Config& config, const int /*event*/,
                           TRandom3& random) {
   ElectronSeed seed;
   seed.x_cm = random.Uniform(-config.gap_cm(), config.gap_cm());
   seed.y_cm = random.Uniform(-config.gap_cm(), config.gap_cm());
-  seed.z_cm = config.launch_z_cm() - 1.0e-9;
-  seed.energy_ev = event == 0
-                       ? config.initial_energy_ev
-                       : g_energy.random_energy(config.initial_energy_ev);
+  seed.z_cm = config.launch_z_cm() - config.electron_seed_inset_cm();
+  seed.energy_ev = config.initial_energy_ev;
   const double phi = random.Uniform(0.0, 2.0 * kPi);
   const double theta = 0.75 * kPi;
   seed.dx = std::cos(phi) * std::sin(theta);
@@ -1227,9 +1225,12 @@ ElectronSeed cathode_photoelectron_seed(
     const Config& config, double x_cm, double y_cm, double time_ns,
     double energy_ev, int generation, TRandom3& random) {
   ElectronSeed seed;
-  seed.x_cm = x_cm;
-  seed.y_cm = y_cm;
-  seed.z_cm = config.gap_cm() - 1.0e-9;
+  const double inset = config.electron_seed_inset_cm();
+  const double half_width = config.electron_transport_half_width_cm();
+  const double xy_limit = std::max(0.0, half_width - inset);
+  seed.x_cm = std::clamp(x_cm, -xy_limit, xy_limit);
+  seed.y_cm = std::clamp(y_cm, -xy_limit, xy_limit);
+  seed.z_cm = config.gap_cm() - inset;
   seed.time_ns = time_ns;
   seed.energy_ev = std::max(1.0e-6, energy_ev);
   const double cos_theta = -random.Uniform(0.0, 1.0);
@@ -1377,9 +1378,12 @@ int main(int argc, char* argv[]) {
           ey = 0.0;
           ez = uniform_field;
         });
-    field.SetArea(-config.xy_half_width_cm(), -config.xy_half_width_cm(), 0.0,
-                  config.xy_half_width_cm(), config.xy_half_width_cm(),
-                  config.z_max_cm());
+    const double electron_transport_half_width_cm =
+        config.electron_transport_half_width_cm();
+    field.SetArea(-electron_transport_half_width_cm,
+                  -electron_transport_half_width_cm, 0.0,
+                  electron_transport_half_width_cm,
+                  electron_transport_half_width_cm, config.z_max_cm());
     field.SetMedium(&gas);
 
     SpaceCharge space_charge;
@@ -1390,9 +1394,10 @@ int main(int argc, char* argv[]) {
     if (space_charge.rings != nullptr) {
       sensor.AddComponent(space_charge.rings.get());
     }
-    sensor.SetArea(-config.xy_half_width_cm(), -config.xy_half_width_cm(), 0.0,
-                   config.xy_half_width_cm(), config.xy_half_width_cm(),
-                   config.z_max_cm());
+    sensor.SetArea(-electron_transport_half_width_cm,
+                   -electron_transport_half_width_cm, 0.0,
+                   electron_transport_half_width_cm,
+                   electron_transport_half_width_cm, config.z_max_cm());
 
     PhotonGeometry photon_geometry;
     photon_geometry.xmin_cm = -config.transport_half_width_cm();
@@ -1446,6 +1451,11 @@ int main(int argc, char* argv[]) {
                 << config.transport_half_width_cm() << " cm ("
                 << config.transport_half_width_cm() / config.gap_cm()
                 << " gaps)\n"
+                << "  electron half width       = "
+                << config.electron_transport_half_width_cm() << " cm ("
+                << config.electron_transport_half_width_cm() /
+                       config.gap_cm()
+                << " gaps)\n"
                 << "  prompt time window        = "
                 << config.prompt_time_max_ns << " ns\n"
                 << "  slowest mean kinetic delay = "
@@ -1473,13 +1483,8 @@ int main(int argc, char* argv[]) {
     // Keep every histogram/tree in memory while the full simulation runs.
     // The ROOT file is opened only after a successful chain, so a failed run
     // cannot leave a valid-looking but incomplete output file behind.
-    TH1D h_electron_energy(
-        "hElectronEnergyDistribution",
-        "Electron energy distribution from null-collision steps;E_{e} [eV];samples",
-        kEnergyBins, 0.0, 50.0);
     TH1D h_levels("hLevels", "Excitation Distribution;hLevel;excitations",
                   n_levels, 0.0, static_cast<double>(n_levels));
-    use_hist_draw_option(h_electron_energy);
     use_hist_draw_option(h_levels);
 
     std::unique_ptr<TH3I> h_exc_xyz;
@@ -1608,15 +1613,12 @@ int main(int argc, char* argv[]) {
     //                         Microscopic avalanches
     // ========================================================================
 
-    g_energy.reset();
     g_collisions.reset(h_levels, h_exc_xyz.get(), h_exc_zt.get(),
                        config.space_charge);
 
     AvalancheMicroscopic avalanche;
     avalanche.SetSensor(&sensor);
     avalanche.EnableSignalCalculation(false);
-    avalanche.EnableNullCollisionSteps(true, 1);
-    avalanche.SetUserHandleStep(handle_step);
     avalanche.SetUserHandleCollision(handle_collision);
 
     RunningStatistics electron_statistics;
@@ -1659,10 +1661,38 @@ int main(int argc, char* argv[]) {
         queue.pop_front();
         g_collisions.start_avalanche();
 
-        avalanche.AvalancheElectron(seed.x_cm, seed.y_cm, seed.z_cm,
-                                    seed.time_ns, seed.energy_ev,
-                                    seed.dx, seed.dy, seed.dz);
+        // AvalancheElectron returns false when the seed cannot be transported
+        // (for example because it starts outside the Sensor/medium).  Feedback
+        // seeds must never fail silently: otherwise a QE-accepted
+        // photoelectron can appear in the ROOT while producing no secondary
+        // trajectory.
+        avalanche_ne = 0;
+        avalanche_ni = 0;
+        const bool avalanche_ok = avalanche.AvalancheElectron(
+            seed.x_cm, seed.y_cm, seed.z_cm, seed.time_ns, seed.energy_ev,
+            seed.dx, seed.dy, seed.dz);
         avalanche.GetAvalancheSize(avalanche_ne, avalanche_ni);
+        const std::size_t n_endpoints =
+            avalanche.GetNumberOfElectronEndpoints();
+
+        if (!avalanche_ok || n_endpoints == 0) {
+          std::ostringstream message;
+          message << "Electron avalanche seed could not be transported: "
+                  << "primaryId=" << event
+                  << ", generation=" << seed.generation
+                  << ", seedType=" << static_cast<int>(seed.type)
+                  << ", x=" << seed.x_cm << " cm"
+                  << ", y=" << seed.y_cm << " cm"
+                  << ", z=" << seed.z_cm << " cm"
+                  << ", t=" << seed.time_ns << " ns"
+                  << ", E=" << seed.energy_ev << " eV"
+                  << ", AvalancheElectron="
+                  << (avalanche_ok ? "true" : "false")
+                  << ", endpoints=" << n_endpoints
+                  << ", ne=" << avalanche_ne
+                  << ", ni=" << avalanche_ni;
+          throw std::runtime_error(message.str());
+        }
         if (seed.type == SeedType::Primary && seed.generation == 0) {
           primary_avalanche_ne = avalanche_ne;
           primary_avalanche_ni = avalanche_ni;
@@ -1680,7 +1710,11 @@ int main(int argc, char* argv[]) {
         endpoint_primary_id = event;
         endpoint_avalanche_id = primary_n_avalanches - 1;
         endpoint_generation = seed.generation;
-        for (int electron = 0; electron < avalanche_ne; ++electron) {
+        // GetAvalancheSize(ne, ni) is the charge yield, not the safest loop
+        // bound for stored trajectories.  In particular, an electron that is
+        // attached can leave an endpoint even when the final electron yield is
+        // zero.  Use Garfield's endpoint count for all time/endpoint output.
+        for (std::size_t electron = 0; electron < n_endpoints; ++electron) {
           double ex0 = 0.0, ey0 = 0.0, ez0 = 0.0, et0 = 0.0, ee0 = 0.0;
           double ex1 = 0.0, ey1 = 0.0, ez1 = 0.0, et1 = 0.0, ee1 = 0.0;
           avalanche.GetElectronEndpoint(
@@ -1688,8 +1722,8 @@ int main(int argc, char* argv[]) {
               ee1, endpoint_status);
           data_per_electron.Fill();
 
-          // One entry per final electron. Peaks in this histogram show when
-          // the primary and feedback avalanches deliver their electrons.
+          // One entry per tracked electron endpoint. Peaks in this histogram show when
+          // the primary and feedback avalanches terminate their trajectories.
           if (std::isfinite(et1) && et1 >= 0.0) {
             photon_hists.electrons_vs_time_full.Fill(et1);
             if (et1 <= config.prompt_time_max_ns) {
@@ -1729,15 +1763,16 @@ int main(int argc, char* argv[]) {
             static_cast<int>(std::min<long long>(
                 config.mc_samples, std::numeric_limits<int>::max())));
 
-        auto enqueue_child = [&](ElectronSeed child, bool is_photoelectron) {
+        auto enqueue_child = [&](ElectronSeed child,
+                                 bool is_photoelectron) -> bool {
           if (child.generation > config.max_feedback_generations) {
             ++photon_summary.suppressed_generation_seeds;
-            return;
+            return false;
           }
           if (primary_n_avalanches + static_cast<int>(queue.size()) >=
               config.max_avalanches_per_primary) {
             ++photon_summary.suppressed_avalanche_limit_seeds;
-            return;
+            return false;
           }
           queue.push_back(child);
           if (is_photoelectron) {
@@ -1747,6 +1782,7 @@ int main(int argc, char* argv[]) {
             ++primary_n_photoionisation_seeds;
             ++photon_summary.feedback_photoionisation_seeds;
           }
+          return true;
         };
 
         auto record_cathode_impact =
@@ -1761,26 +1797,37 @@ int main(int argc, char* argv[]) {
                   config.qe, qe_material, random);
               if (!photoelectron.emitted) return;
 
-              photon_hists.photoelectron_xy.Fill(x_cm, y_cm, photon_weight);
-              photon_hists.photoelectron_time_energy.Fill(
-                  impact_time_ns, photoelectron.energy_ev, photon_weight);
-              avalanche_photoelectrons += photon_weight;
-
-              // The spectra/histograms use all mcSamples with weight 1/N. For
-              // the physical feedback chain, randomly keep one in N accepted
-              // photoelectrons. This is unbiased and prevents mcSamples from
-              // artificially multiplying the number of avalanches.
+              // Optical oversampling uses mcSamples candidates with weight
+              // 1 / mcSamples. Only the retained candidate is a discrete,
+              // physical photoelectron seed for the feedback chain.
               if (random.Uniform() >= photon_weight) return;
-              enqueue_child(cathode_photoelectron_seed(
-                                config, x_cm, y_cm, impact_time_ns,
-                                photoelectron.energy_ev, seed.generation + 1,
-                                random),
-                            true);
+
+              const auto child = cathode_photoelectron_seed(
+                  config, x_cm, y_cm, impact_time_ns,
+                  photoelectron.energy_ev, seed.generation + 1, random);
+              if (!enqueue_child(child, true)) return;
+
+              // These histograms and the per-avalanche counter now describe
+              // actual secondary-avalanche seeds, not weighted QE candidates.
+              photon_hists.photoelectron_xy.Fill(x_cm, y_cm);
+              photon_hists.photoelectron_time_energy.Fill(
+                  impact_time_ns, photoelectron.energy_ev);
+              avalanche_photoelectrons += 1.0;
             };
 
         for (const auto& component : components) {
           const long long samples = photonemission::number_of_mc_photons(
               component.expected_photons, config.mc_samples, random);
+          if (samples <= 0) continue;
+
+          // Resolve the microscopic source population once per kinetic
+          // component, not once per emitted photon. This preserves the exact
+          // x-y-z-t collision coordinates while avoiding an O(N_sites) scan
+          // for every photon in a high-gain avalanche.
+          const auto source_sites = photonemission::matching_source_sites(
+              component, level_info, g_collisions.sites_this_avalanche);
+          if (source_sites.empty()) continue;
+
           if (primary_mc_photons + samples >
               config.max_mc_photons_per_primary) {
             throw std::runtime_error(
@@ -1791,9 +1838,8 @@ int main(int argc, char* argv[]) {
           total_mc_photons += samples;
 
           for (long long sample = 0; sample < samples; ++sample) {
-            const auto* site = photonemission::sample_source_site(
-                component, level_info, g_collisions.sites_this_avalanche,
-                random);
+            const auto* site =
+                photonemission::sample_source_site(source_sites, random);
             if (site == nullptr) continue;
 
             const double x_cm = site->x_cm;
@@ -2027,7 +2073,6 @@ int main(int argc, char* argv[]) {
                   (primary_avalanche_gain * config.gap_cm())
             : std::numeric_limits<double>::quiet_NaN();
 
-    for (const float energy : g_energy.values) h_electron_energy.Fill(energy);
 
     photon_summary.accounted_transport_outcomes =
         photon_summary.nonionising_photoabsorptions +
@@ -2100,7 +2145,6 @@ int main(int argc, char* argv[]) {
     // and the axis range can be reset interactively in ROOT.
     zoom_time_axis_to_content(photon_hists.photon_wavelength_time);
 
-    h_electron_energy.Write();
     h_levels.Write();
     if (h_exc_xyz != nullptr) h_exc_xyz->Write();
     if (h_exc_zt != nullptr) h_exc_zt->Write();
@@ -2133,7 +2177,6 @@ int main(int argc, char* argv[]) {
     // Detach them before TFile::Close so the file cannot delete them first and
     // leave their C++ owners with dangling pointers (the classic exit-139
     // double-destruction failure).
-    h_electron_energy.SetDirectory(nullptr);
     h_levels.SetDirectory(nullptr);
     if (h_exc_xyz != nullptr) h_exc_xyz->SetDirectory(nullptr);
     if (h_exc_zt != nullptr) h_exc_zt->SetDirectory(nullptr);

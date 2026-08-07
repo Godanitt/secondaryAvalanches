@@ -37,19 +37,19 @@ field_sets:
     pressures_bar: [1]
     gap_mm: 0.150
     reference_field_kv_cm: 39.8
-    field_scales: [1.1, 1.2]
+    field_scales: [1.1, 1.2, 1.25, 1.3]
 
   - components: {ar: 85, cf4: 15}
     pressures_bar: [1]
     gap_mm: 0.150
     reference_field_kv_cm: 43
-    field_scales: [1.1, 1.2]
+    field_scales: [1.1, 1.2, 1.25, 1.3]
 
   - components: {ar: 80, cf4: 20}
     pressures_bar: [1]
     gap_mm: 0.150
     reference_field_kv_cm: 44
-    field_scales: [1.1, 1.2]
+    field_scales: [1.1, 1.2, 1.25, 1.3]
 
-npe: 20
+npe: 100
 workers: 3
